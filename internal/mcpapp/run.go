@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/vgromanov/obsidian-mcp/internal/config"
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
 	"github.com/vgromanov/obsidian-mcp/internal/prompts"

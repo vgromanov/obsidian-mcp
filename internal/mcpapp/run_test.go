@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
 )
 

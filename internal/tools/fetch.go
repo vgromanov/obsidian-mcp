@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/vgromanov/obsidian-mcp/internal/fetch"
 )
 
@@ -36,7 +37,7 @@ func RegisterFetch(s *mcp.Server) {
 		if err != nil {
 			return nil, nil, err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		textBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, nil, err

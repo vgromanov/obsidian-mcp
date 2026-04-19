@@ -26,9 +26,7 @@ func ParseParameters(content string) []Parameter {
 			continue
 		}
 		code := strings.TrimSpace(part[:idx[0]])
-		for _, p := range parsePromptCalls(code) {
-			out = append(out, p)
-		}
+		out = append(out, parsePromptCalls(code)...)
 	}
 	return out
 }
@@ -120,7 +118,7 @@ func parseStringArg(s string) (value string, rest string, ok bool) {
 			i += 2
 			continue
 		}
-		if c == byte(q) {
+		if c == q {
 			return b.String(), s[i+1:], true
 		}
 		b.WriteByte(c)

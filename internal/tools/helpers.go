@@ -30,11 +30,3 @@ func prettyJSONBytes(raw []byte) string {
 	}
 	return string(b)
 }
-
-func prettyJSON(v any) string {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
-}

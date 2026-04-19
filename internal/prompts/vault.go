@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
 	"github.com/vgromanov/obsidian-mcp/internal/templater"
 )
@@ -19,14 +20,6 @@ const promptTag = "mcp-tools-prompt"
 type Deps struct {
 	Client     *obsidian.Client
 	PromptsDir string
-}
-
-func vaultListPath(dir string) string {
-	d := strings.Trim(strings.TrimSpace(dir), "/")
-	if d == "" {
-		return "/vault/"
-	}
-	return "/vault/" + d + "/"
 }
 
 // ListFromVault implements prompts/list (dynamic), mirroring upstream setupObsidianPrompts.

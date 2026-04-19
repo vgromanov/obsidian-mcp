@@ -89,7 +89,7 @@ func (c *Client) Do(ctx context.Context, opt RequestOptions) (int, []byte, error
 	if method == "" {
 		method = http.MethodGet
 	}
-	var body io.Reader = opt.Body
+	body := opt.Body
 	if body == nil && opt.BodyString != "" {
 		body = strings.NewReader(opt.BodyString)
 	}
@@ -117,7 +117,7 @@ func (c *Client) Do(ctx context.Context, opt RequestOptions) (int, []byte, error
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return resp.StatusCode, nil, err

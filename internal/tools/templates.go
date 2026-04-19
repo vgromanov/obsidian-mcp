@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
 	"github.com/vgromanov/obsidian-mcp/internal/templater"
 )
@@ -36,10 +37,7 @@ func RegisterTemplater(s *mcp.Server, d Deps) {
 		if err != nil {
 			return nil, nil, err
 		}
-		create := false
-		if in.CreateFile != nil && strings.EqualFold(*in.CreateFile, "true") {
-			create = true
-		}
+		create := in.CreateFile != nil && strings.EqualFold(*in.CreateFile, "true")
 		req := obsidian.TemplateExecutionRequest{
 			Name:       in.Name,
 			Arguments:  args,
