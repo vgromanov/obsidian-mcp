@@ -1,0 +1,128 @@
+version: 2
+
+project_name: obsidian-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: obsidian-mcp
+    main: ./cmd/obsidian-mcp
+    binary: obsidian-mcp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/vgromanov/obsidian-mcp/internal/version.Version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - docs/**/*
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: SHA256SUMS
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: Fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "merge conflict"
+      - "Merge pull request"
+      - "Merge branch"
+
+dockers:
+  - id: linux-amd64
+    image_templates:
+      - "ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=MCP server for Obsidian (Go)"
+      - "--label=org.opencontainers.image.url=https://github.com/vgromanov/obsidian-mcp"
+      - "--label=org.opencontainers.image.source=https://github.com/vgromanov/obsidian-mcp"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+  - id: linux-arm64
+    image_templates:
+      - "ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-arm64"
+    use: buildx
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=MCP server for Obsidian (Go)"
+      - "--label=org.opencontainers.image.url=https://github.com/vgromanov/obsidian-mcp"
+      - "--label=org.opencontainers.image.source=https://github.com/vgromanov/obsidian-mcp"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}
+    image_templates:
+      - ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-amd64
+      - ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-arm64
+  - name_template: ghcr.io/vgromanov/obsidian-mcp:latest
+    image_templates:
+      - ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-amd64
+      - ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}-arm64
+
+release:
+  github:
+    owner: vgromanov
+    name: obsidian-mcp
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## obsidian-mcp {{ .Tag }}
+
+    See [CHANGELOG.md](https://github.com/vgromanov/obsidian-mcp/blob/main/CHANGELOG.md) for the full notes.
+  footer: |
+    ---
+    Pull the container image: `docker pull ghcr.io/vgromanov/obsidian-mcp:{{ .Version }}`

@@ -1,0 +1,21 @@
+# Build output
+/obsidian-mcp
+/dist/
+
+# Test / coverage
+/coverage.out
+/c.out
+*.test
+*.out
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+.cursor/
+
+# Local config / secrets
+.env
+.env.*
