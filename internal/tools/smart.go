@@ -20,7 +20,7 @@ func RegisterSmartConnections(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_vault_smart",
 		Description: "Search for documents semantically matching a text string.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in smartIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in smartIn) (*mcp.CallToolResult, any, error) {
 		body := map[string]any{"query": in.Query}
 		if in.Filter != nil {
 			f := map[string]any{}
@@ -41,6 +41,6 @@ func RegisterSmartConnections(s *mcp.Server, d Deps) {
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(prettyJSONBytes(raw)), nil, nil
+		return jsonResult(raw), nil, nil
 	})
 }
