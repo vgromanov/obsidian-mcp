@@ -26,7 +26,7 @@ func RegisterFetch(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "fetch",
 		Description: "Reads and returns the content of any web page. Returns the content in Markdown format by default, or can return raw HTML if raw=true parameter is set. Supports pagination through maxLength and startIndex parameters.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fetchIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fetchIn) (*mcp.CallToolResult, any, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, in.URL, nil)
 		if err != nil {
 			return nil, nil, err
@@ -81,10 +81,21 @@ func RegisterFetch(s *mcp.Server) {
 			content = content[start:end]
 			content += fmt.Sprintf("\n\n<error>Content truncated. Call the fetch tool with a startIndex of %d to get more content.</error>", start+maxLen)
 		}
-		first := prefix + "Contents of " + in.URL + ":\n" + content
-		// Upstream always sets hasMore: true in pagination JSON (quirky); mirror it.
-		pag := fmt.Sprintf(`Pagination: {"totalLength":%d,"startIndex":%d,"endIndex":%d,"hasMore":true}`,
-			totalLen, start, start+len(content))
-		return textResult2(strings.TrimSpace(first), pag), nil, nil
+		first := strings.TrimSpace(prefix + "Contents of " + in.URL + ":\n" + content)
+		endIndex := start + len(content)
+		structured := map[string]any{
+			"url":     in.URL,
+			"content": content,
+			"pagination": map[string]any{
+				"totalLength": totalLen,
+				"startIndex":  start,
+				"endIndex":    endIndex,
+				"hasMore":     true, // upstream always sets hasMore: true (quirky); mirror it
+			},
+		}
+		return &mcp.CallToolResult{
+			Content:           []mcp.Content{&mcp.TextContent{Text: first}},
+			StructuredContent: structured,
+		}, nil, nil
 	})
 }

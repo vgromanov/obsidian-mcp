@@ -19,7 +19,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_periodic_note",
 		Description: "Get the current periodic note for daily, weekly, monthly, quarterly, or yearly period (GET /periodic/{period}/). Requires the Periodic Notes community plugin configured in Obsidian. Markdown or note+json.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodFmtIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodFmtIn) (*mcp.CallToolResult, any, error) {
 		p, err := obsidian.ParsePeriodicPeriod(in.Period)
 		if err != nil {
 			return nil, nil, err
@@ -30,7 +30,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 			return nil, nil, err
 		}
 		if asJSON {
-			return textResult(prettyJSONBytes(b)), nil, nil
+			return jsonResult(b), nil, nil
 		}
 		return textResult(string(b)), nil, nil
 	})
@@ -42,7 +42,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_periodic_note",
 		Description: "Replace the entire content of the current periodic note for the given period (PUT /periodic/{period}/). Creates the note if needed per Local REST API behavior.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodContentIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodContentIn) (*mcp.CallToolResult, any, error) {
 		p, err := obsidian.ParsePeriodicPeriod(in.Period)
 		if err != nil {
 			return nil, nil, err
@@ -56,7 +56,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "append_to_periodic_note",
 		Description: "Append markdown to the end of the current periodic note for the given period (POST /periodic/{period}/).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodContentIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodContentIn) (*mcp.CallToolResult, any, error) {
 		p, err := obsidian.ParsePeriodicPeriod(in.Period)
 		if err != nil {
 			return nil, nil, err
@@ -74,7 +74,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "patch_periodic_note",
 		Description: "Patch the current periodic note relative to a heading, block reference, or frontmatter field (PATCH /periodic/{period}/). Same Operation / Target-Type / Target semantics as patch_vault_file.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in patchPeriodicIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in patchPeriodicIn) (*mcp.CallToolResult, any, error) {
 		p, err := obsidian.ParsePeriodicPeriod(in.Period)
 		if err != nil {
 			return nil, nil, err
@@ -92,7 +92,7 @@ func RegisterPeriodic(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "delete_periodic_note",
 		Description: "Delete the current periodic note file for the given period (DELETE /periodic/{period}/).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodOnlyIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in periodOnlyIn) (*mcp.CallToolResult, any, error) {
 		p, err := obsidian.ParsePeriodicPeriod(in.Period)
 		if err != nil {
 			return nil, nil, err

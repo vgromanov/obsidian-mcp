@@ -13,12 +13,12 @@ func RegisterCommands(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_commands",
 		Description: "List Obsidian commands available to the Local REST API (id + display name).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 		raw, err := cli.ListCommands(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(prettyJSONBytes(raw)), nil, nil
+		return jsonResult(raw), nil, nil
 	})
 
 	type execCommandIn struct {
@@ -27,7 +27,7 @@ func RegisterCommands(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "execute_command",
 		Description: "Execute an Obsidian command by id (POST /commands/{commandId}/). This runs inside the Obsidian UI and may open panes, modify editor state, or trigger plugin actions — use deliberately.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in execCommandIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in execCommandIn) (*mcp.CallToolResult, any, error) {
 		if err := cli.ExecuteCommand(ctx, in.CommandID); err != nil {
 			return nil, nil, err
 		}

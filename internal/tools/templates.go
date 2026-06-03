@@ -23,7 +23,7 @@ func RegisterTemplater(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "execute_template",
 		Description: "Execute a Templater template with the given arguments",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in execIn) (*mcp.CallToolResult, *void, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in execIn) (*mcp.CallToolResult, any, error) {
 		b, err := d.Client.GetVaultFile(ctx, in.Name, true)
 		if err != nil {
 			return nil, nil, err
@@ -50,7 +50,7 @@ func RegisterTemplater(s *mcp.Server, d Deps) {
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(prettyJSONBytes(raw)), nil, nil
+		return jsonResult(raw), nil, nil
 	})
 }
 

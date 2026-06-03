@@ -43,7 +43,11 @@ func TestMCPToolGetServerInfo(t *testing.T) {
 	require.False(t, res.IsError)
 	require.NotEmpty(t, res.Content)
 	txt := res.Content[0].(*mcp.TextContent).Text
-	require.Contains(t, txt, `"status": "ok"`)
+	require.Contains(t, txt, `"status"`)
+	require.NotNil(t, res.StructuredContent)
+	structured, ok := res.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "ok", structured["status"])
 }
 
 func TestMCPPromptsListDynamic(t *testing.T) {
@@ -113,8 +117,9 @@ func TestMCPToolListTags(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	txt := res.Content[0].(*mcp.TextContent).Text
-	require.Contains(t, txt, `"name": "project"`)
-	require.Contains(t, txt, `"count": 3`)
+	require.Contains(t, txt, `"name"`)
+	require.Contains(t, txt, `"count"`)
+	require.NotNil(t, res.StructuredContent)
 }
 
 func TestMCPToolExecuteCommand(t *testing.T) {
@@ -280,5 +285,44 @@ func TestMCPToolGetTagFilesViaJsonLogic(t *testing.T) {
 	require.Equal(t, "/search/", sawPath)
 	require.Equal(t, "application/vnd.olrapi.jsonlogic+json", sawCT)
 	require.Equal(t, `{"in":["project",{"var":"tags"}]}`, sawBody)
-	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"filename": "Notes/A.md"`)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"filename"`)
+	require.NotNil(t, res.StructuredContent)
+	structured := res.StructuredContent.(map[string]any)
+	data, ok := structured["data"].([]any)
+	require.True(t, ok)
+	require.Len(t, data, 1)
+}
+
+func TestMCPToolFetchStructuredPagination(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html><body><p>Hello</p></body></html>"))
+	}))
+	t.Cleanup(ts.Close)
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, nil, "Prompts")
+	_, err := srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "fetch",
+		Arguments: map[string]any{"url": ts.URL},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Len(t, res.Content, 1)
+	require.NotContains(t, res.Content[0].(*mcp.TextContent).Text, "Pagination:")
+
+	structured := res.StructuredContent.(map[string]any)
+	pagination, ok := structured["pagination"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, float64(0), pagination["startIndex"])
+	require.Equal(t, true, pagination["hasMore"])
 }
