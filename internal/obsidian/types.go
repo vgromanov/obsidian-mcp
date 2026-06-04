@@ -52,6 +52,17 @@ type VaultDirectoryList struct {
 	Files []string `json:"files"`
 }
 
+// LocalSmartLookupSearchRequest POST /local-smart-lookup/search/ (local-smart-lookup plugin).
+type LocalSmartLookupSearchRequest struct {
+	Query          string         `json:"query"`
+	Limit          *int           `json:"limit,omitempty"`
+	DataviewSource *string        `json:"dataviewSource,omitempty"`
+	DataviewQuery  *string        `json:"dataviewQuery,omitempty"`
+	Where          *string        `json:"where,omitempty"`
+	Tags           []string       `json:"tags,omitempty"`
+	Frontmatter    map[string]any `json:"frontmatter,omitempty"`
+}
+
 // TemplateExecutionRequest POST /templates/execute
 type TemplateExecutionRequest struct {
 	Name       string            `json:"name"`

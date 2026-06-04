@@ -6,6 +6,9 @@ import (
 
 // Deps carries shared dependencies for tool handlers.
 type Deps struct {
-	Client     *obsidian.Client
-	PromptsDir string
+	Client      *obsidian.Client
+	PromptsDir  string
+	OmlxBaseURL string
+	OmlxAPIKey  string
+	OmlxCheck   bool
 }

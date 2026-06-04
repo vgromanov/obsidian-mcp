@@ -309,22 +309,15 @@ func (c *Client) DeleteVaultFile(ctx context.Context, filename string) error {
 	return err
 }
 
-// SearchVaultSmart POST /search/smart (registered by obsidian-mcp-tools Obsidian plugin).
-func (c *Client) SearchVaultSmart(ctx context.Context, body any) (json.RawMessage, error) {
-	inner, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	// obsidian-mcp-tools validates the body with jsonSearchRequest:
-	// type("string.json.parse").to(searchRequest) — Express must receive a JSON string
-	// that parses to { "query", "filter?" }, not a raw JSON object.
-	outer, err := json.Marshal(string(inner))
+// SearchVaultLocal POST /local-smart-lookup/search/ (local-smart-lookup plugin extension route).
+func (c *Client) SearchVaultLocal(ctx context.Context, body any) (json.RawMessage, error) {
+	raw, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	h := http.Header{}
 	h.Set("Content-Type", mimeJSON)
-	opt := RequestOptions{Method: http.MethodPost, Path: "/search/smart", BodyString: string(outer), Headers: h}
+	opt := RequestOptions{Method: http.MethodPost, Path: "/local-smart-lookup/search/", BodyString: string(raw), Headers: h}
 	_, b, err := c.Do(ctx, opt)
 	if err != nil {
 		return nil, err

@@ -10,7 +10,7 @@ func RegisterAll(s *mcp.Server, d Deps) {
 	RegisterTags(s, d)
 	RegisterCommands(s, d)
 	RegisterPeriodic(s, d)
-	RegisterSmartConnections(s, d)
+	RegisterLocalSmartLookup(s, d)
 	RegisterTemplater(s, d)
 	RegisterFetch(s)
 }

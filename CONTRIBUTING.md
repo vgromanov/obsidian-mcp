@@ -9,7 +9,7 @@ are all welcome.
 - **Obsidian** with the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api)
   plugin enabled, plus the
   [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools)
-  plugin if you want to test Smart Connections / Templater / vault prompts.
+  plugin if you want to test Local Smart Lookup / Templater / vault prompts.
 
 ## Workflow
 

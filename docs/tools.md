@@ -28,17 +28,39 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `append_to_periodic_note` | Local REST API | `POST /periodic/{period}/` |
 | `patch_periodic_note` | Local REST API | `PATCH /periodic/{period}/` |
 | `delete_periodic_note` | Local REST API | `DELETE /periodic/{period}/` |
-| `search_vault_smart` | Smart Connections | `POST /search/smart` (Obsidian plugin route) |
+| `search_vault_local` | Local Smart Lookup | `POST /local-smart-lookup/search/` (extension route; optional oMLX preflight) |
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** 26 tools (24 Local REST API + smart search + templater + fetch).
+**Count:** 26 tools (24 Local REST API + local semantic search + templater + fetch).
+
+### `search_vault_local` arguments
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `query` | string | Required natural-language question |
+| `limit` | number | Max chunk results (plugin default if omitted) |
+| `dataviewSource` | string | Dataview source expression to narrow paths before vector search |
+| `dataviewQuery` | string | Full Dataview DQL to resolve allowed paths |
+| `tags` | string[] | LanceDB metadata filter (frontmatter or inline tags) |
+| `frontmatter` | object | LanceDB metadata filter on indexed scalar frontmatter fields |
+| `where` | string | LanceDB SQL-style metadata filter (e.g. `type = 'note'`) |
 
 > Tag rename is intentionally not exposed: upstream Local REST API has no `PATCH /tags/{tag}/` route, and emulating it client-side (rewriting every matching file) is too risky for a tool an LLM might call by mistake. Use Obsidian's UI to rename tags vault-wide.
 
 ## Prerequisites
 
-- **Local REST API** plugin (required).
-- **obsidian-mcp-tools** Obsidian plugin (required for `/search/smart` and `/templates/execute` — this Go binary replaces only the **downloaded MCP server**, not those routes).
-- **Smart Connections** + **Templater** (recommended; required for the two plugin routes above to succeed).
+- **Local REST API** or **[obsidian-api](https://github.com/vigeron/obsidian-api)** with extension support (required).
+- **obsidian-mcp-tools** Obsidian plugin (required for `/templates/execute` and vault prompts — this Go binary replaces only the **downloaded MCP server**, not those routes).
+- **Local Smart Lookup** (`local-smart-lookup` plugin) + **oMLX** on `http://127.0.0.1:8000/v1` with embedding model loaded (required for `search_vault_local`). Set the plugin **Embedding server** to the same host as `OMLX_BASE_URL`.
+- **Dataview** (optional; required when using `dataviewSource` / `dataviewQuery` on `search_vault_local`).
+- **Templater** (required for `execute_template` and vault prompts).
 - **Periodic Notes** (community plugin) configured in Obsidian — required for `/periodic/...` tools to resolve notes; the Local REST API returns errors if the plugin is missing or a period is disabled.
+
+### `search_vault_local` MCP environment
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` | oMLX OpenAI-compatible API base (preflight `GET /models`) |
+| `OMLX_API_KEY` | _(empty)_ | Bearer token when oMLX auth is enabled |
+| `OBSIDIAN_OMLX_CHECK` | `true` | When `true`, probe oMLX before calling Obsidian (set `false` to skip) |
