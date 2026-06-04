@@ -12,7 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
+	"github.com/vgromanov/obsidian-mcp/internal/tools"
 )
+
+func testDeps(cli *obsidian.Client) tools.Deps {
+	return tools.Deps{
+		Client:     cli,
+		PromptsDir: "Prompts",
+		OmlxCheck:  false,
+	}
+}
 
 func TestMCPToolGetServerInfo(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +38,7 @@ func TestMCPToolGetServerInfo(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -71,7 +80,7 @@ func TestMCPPromptsListDynamic(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -104,7 +113,7 @@ func TestMCPToolListTags(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -140,7 +149,7 @@ func TestMCPToolExecuteCommand(t *testing.T) {
 
 	ctx := context.Background()
 	ctM, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -175,7 +184,7 @@ func TestMCPToolPatchPeriodicNoteInvalidPeriod(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -217,7 +226,7 @@ func TestMCPToolPatchPeriodicNoteHeaders(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -267,7 +276,7 @@ func TestMCPToolGetTagFilesViaJsonLogic(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, cli, "Prompts")
+	srv := NewMCPServer(nil, testDeps(cli))
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -302,7 +311,7 @@ func TestMCPToolFetchStructuredPagination(t *testing.T) {
 
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := NewMCPServer(nil, nil, "Prompts")
+	srv := NewMCPServer(nil, testDeps(nil))
 	_, err := srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
 
@@ -325,4 +334,131 @@ func TestMCPToolFetchStructuredPagination(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, float64(0), pagination["startIndex"])
 	require.Equal(t, true, pagination["hasMore"])
+}
+
+func TestMCPToolSearchVaultLocal(t *testing.T) {
+	var sawPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"path":"A.md","text":"chunk","score":0.9}]}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, testDeps(cli))
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "search_vault_local",
+		Arguments: map[string]any{
+			"query":       "local-first AI",
+			"tags":        []any{"research"},
+			"frontmatter": map[string]any{"status": "active"},
+			"limit":       float64(5),
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, "/local-smart-lookup/search/", sawPath)
+	structured := res.StructuredContent.(map[string]any)
+	results, ok := structured["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, results, 1)
+}
+
+func TestMCPToolSearchVaultLocalOmlxPreflightBlocks(t *testing.T) {
+	obsidianCalled := false
+	obsTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		obsidianCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(obsTS.Close)
+
+	omlxTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(omlxTS.Close)
+
+	u, err := url.Parse(obsTS.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", obsTS.Client())
+
+	deps := testDeps(cli)
+	deps.OmlxCheck = true
+	deps.OmlxBaseURL = omlxTS.URL + "/v1"
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, deps)
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "search_vault_local",
+		Arguments: map[string]any{"query": "test"},
+	})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.False(t, obsidianCalled)
+}
+
+func TestMCPToolSearchVaultLocalOmlxPreflightPasses(t *testing.T) {
+	var sawPath string
+	omlxTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/models", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(omlxTS.Close)
+
+	obsTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	t.Cleanup(obsTS.Close)
+
+	u, err := url.Parse(obsTS.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", obsTS.Client())
+
+	deps := testDeps(cli)
+	deps.OmlxCheck = true
+	deps.OmlxBaseURL = omlxTS.URL + "/v1"
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, deps)
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "search_vault_local",
+		Arguments: map[string]any{"query": "test"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, "/local-smart-lookup/search/", sawPath)
 }

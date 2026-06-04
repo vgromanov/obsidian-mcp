@@ -15,6 +15,9 @@ type Config struct {
 	Transport    string // "stdio" or "http"
 	HTTPAddr     string // host:port for streamable HTTP
 	PromptsDir   string
+	OmlxBaseURL  string
+	OmlxAPIKey   string
+	OmlxCheck    bool
 	PrintVersion bool
 }
 
@@ -42,12 +45,15 @@ func envBool(key string, def bool) bool {
 // Load parses flags and environment. Call from main() after flag.Parse().
 func Load() *Config {
 	c := &Config{
-		APIKey:     envString("OBSIDIAN_API_KEY", ""),
-		Host:       envString("OBSIDIAN_HOST", "127.0.0.1"),
-		UseHTTP:    envBool("OBSIDIAN_USE_HTTP", false),
-		Transport:  "stdio",
-		HTTPAddr:   "127.0.0.1:8765",
-		PromptsDir: envString("OBSIDIAN_PROMPTS_DIR", "Prompts"),
+		APIKey:      envString("OBSIDIAN_API_KEY", ""),
+		Host:        envString("OBSIDIAN_HOST", "127.0.0.1"),
+		UseHTTP:     envBool("OBSIDIAN_USE_HTTP", false),
+		Transport:   "stdio",
+		HTTPAddr:    "127.0.0.1:8765",
+		PromptsDir:  envString("OBSIDIAN_PROMPTS_DIR", "Prompts"),
+		OmlxBaseURL: envString("OMLX_BASE_URL", "http://127.0.0.1:8000/v1"),
+		OmlxAPIKey:  envString("OMLX_API_KEY", ""),
+		OmlxCheck:   envBool("OBSIDIAN_OMLX_CHECK", true),
 	}
 
 	flag.StringVar(&c.Transport, "transport", envString("OBSIDIAN_MCP_TRANSPORT", "stdio"), "MCP transport: stdio or http")

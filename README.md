@@ -10,14 +10,14 @@ A single-binary [Model Context Protocol](https://modelcontextprotocol.io/) serve
 
 ## What it gives you
 
-- **26 MCP tools** covering the full [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD, search, open, tags, commands, periodic notes), plus Smart Connections semantic search, Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
+- **26 MCP tools** covering the full [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD, search, open, tags, commands, periodic notes), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
 - **Vault-backed prompts** — any note tagged `mcp-tools-prompt` in your prompts folder is exposed as an MCP prompt, executed through Templater on the Obsidian side. See [docs/prompts.md](docs/prompts.md).
 - **Two transports** — `stdio` (default) for editor integrations, `--transport=http` for shared local use.
 - **Single static binary** (~12 MB), no runtime dependencies, easy to ship.
 
 ## Why a Go rewrite
 
-Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrapper UI. This repo is the inverse: a small, scriptable binary you `go install` once and configure manually. Use it when you want the same MCP capabilities without Node, Bun, or in-app installer flows. The upstream Obsidian plugin is still required so the Local REST API exposes `POST /search/smart` and `POST /templates/execute`; only the external MCP **process** is replaced.
+Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrapper UI. This repo is the inverse: a small, scriptable binary you `go install` once and configure manually. Use it when you want the same MCP capabilities without Node, Bun, or in-app installer flows. The upstream Obsidian plugin is still required so the Local REST API exposes `POST /templates/execute`; only the external MCP **process** is replaced.
 
 ## Prerequisites
 
@@ -25,10 +25,11 @@ Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrap
 |-----------|--------------|
 | [Obsidian](https://obsidian.md/) | All tools |
 | [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin | All tools |
-| [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools) plugin | `search_vault_smart`, `execute_template`, vault prompts |
-| [Smart Connections](https://github.com/brianpetro/obsidian-smart-connections) | `search_vault_smart` |
+| [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools) plugin | `execute_template`, vault prompts |
+| **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local` |
 | [Templater](https://github.com/SilentVoid13/Templater) | `execute_template` and dynamic prompts |
 | [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) | `*_periodic_note` tools |
+| [Dataview](https://github.com/blacksmithgu/obsidian-dataview) | Optional filters on `search_vault_local` |
 
 API key is from **Local REST API → Settings → API Key**.
 
@@ -74,6 +75,9 @@ All knobs are environment variables (CLI flags override). Defaults work for a si
 | `OBSIDIAN_PROMPTS_DIR` | `Prompts` | Vault folder scanned for prompt-template notes |
 | `OBSIDIAN_MCP_TRANSPORT` | `stdio` | Default for `--transport` (`stdio` or `http`) |
 | `OBSIDIAN_MCP_ADDR` | `127.0.0.1:8765` | Default for `--addr` when `--transport=http` |
+| `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` | oMLX API base for `search_vault_local` preflight |
+| `OMLX_API_KEY` | _(empty)_ | Bearer token for oMLX when auth is enabled |
+| `OBSIDIAN_OMLX_CHECK` | `true` | Probe oMLX before `search_vault_local` (set `false` to skip) |
 
 CLI:
 
@@ -93,7 +97,10 @@ obsidian-mcp [--transport=stdio|http] [--addr=host:port] [--prompts-dir=Folder] 
     "obsidian": {
       "command": "obsidian-mcp",
       "env": {
-        "OBSIDIAN_API_KEY": "YOUR_KEY"
+        "OBSIDIAN_API_KEY": "YOUR_KEY",
+        "OMLX_BASE_URL": "http://127.0.0.1:8000/v1",
+        "OMLX_API_KEY": "0000",
+        "OBSIDIAN_OMLX_CHECK": "true"
       }
     }
   }

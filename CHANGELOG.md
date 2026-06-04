@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `search_vault_local` MCP tool: semantic search via the Local Smart Lookup
+  plugin (`POST /local-smart-lookup/search/`) with optional oMLX preflight
+  (`OMLX_BASE_URL`, `OMLX_API_KEY`, `OBSIDIAN_OMLX_CHECK`).
+
+### Removed
+
+- `search_vault_smart` (Smart Connections) — use `search_vault_local` instead to
+  avoid duplicate semantic-search tools for agents.
+
 ### Fixed
 
 - JSON-returning MCP tools now populate `structuredContent` instead of only
