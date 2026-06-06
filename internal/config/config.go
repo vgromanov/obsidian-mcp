@@ -19,6 +19,15 @@ type Config struct {
 	OmlxAPIKey   string
 	OmlxCheck    bool
 	PrintVersion bool
+
+	// RetrievalDir, when set, enables best-effort append-only logging of
+	// search_vault_local events to <RetrievalDir>/<hostname>.jsonl (one shard
+	// per machine). Point it inside the synced vault so the dream-cycle judge
+	// can consume it across workstations. Empty disables logging.
+	RetrievalDir string
+	// RetrievalRegime is an opaque retriever/reranker version tag stamped on
+	// every logged event so downstream scoring never compares incomparable regimes.
+	RetrievalRegime string
 }
 
 func envString(key, def string) string {
@@ -54,6 +63,9 @@ func Load() *Config {
 		OmlxBaseURL: envString("OMLX_BASE_URL", "http://127.0.0.1:8000/v1"),
 		OmlxAPIKey:  envString("OMLX_API_KEY", ""),
 		OmlxCheck:   envBool("OBSIDIAN_OMLX_CHECK", true),
+
+		RetrievalDir:    envString("OBSIDIAN_RETRIEVAL_DIR", ""),
+		RetrievalRegime: envString("OBSIDIAN_RETRIEVAL_REGIME", ""),
 	}
 
 	flag.StringVar(&c.Transport, "transport", envString("OBSIDIAN_MCP_TRANSPORT", "stdio"), "MCP transport: stdio or http")

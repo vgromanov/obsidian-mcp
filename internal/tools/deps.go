@@ -11,4 +11,9 @@ type Deps struct {
 	OmlxBaseURL string
 	OmlxAPIKey  string
 	OmlxCheck   bool
+
+	// RetrievalDir enables per-host append-only logging of search_vault_local
+	// events (empty = disabled). RetrievalRegime is stamped on each event.
+	RetrievalDir    string
+	RetrievalRegime string
 }

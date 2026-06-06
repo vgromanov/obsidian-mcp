@@ -78,6 +78,8 @@ All knobs are environment variables (CLI flags override). Defaults work for a si
 | `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` | oMLX API base for `search_vault_local` preflight |
 | `OMLX_API_KEY` | _(empty)_ | Bearer token for oMLX when auth is enabled |
 | `OBSIDIAN_OMLX_CHECK` | `true` | Probe oMLX before `search_vault_local` (set `false` to skip) |
+| `OBSIDIAN_RETRIEVAL_DIR` | _(empty)_ | If set, append `search_vault_local` events to a per-host shard `<dir>/<hostname>.jsonl` (best-effort, never blocks search). Point inside the synced vault to feed offline scoring. Empty disables logging. |
+| `OBSIDIAN_RETRIEVAL_REGIME` | _(empty)_ | Opaque retriever/reranker version tag stamped on each logged retrieval event |
 
 CLI:
 

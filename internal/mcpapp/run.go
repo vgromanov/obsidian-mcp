@@ -46,11 +46,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	srv := NewMCPServer(log, tools.Deps{
-		Client:      cli,
-		PromptsDir:  cfg.PromptsDir,
-		OmlxBaseURL: cfg.OmlxBaseURL,
-		OmlxAPIKey:  cfg.OmlxAPIKey,
-		OmlxCheck:   cfg.OmlxCheck,
+		Client:          cli,
+		PromptsDir:      cfg.PromptsDir,
+		OmlxBaseURL:     cfg.OmlxBaseURL,
+		OmlxAPIKey:      cfg.OmlxAPIKey,
+		OmlxCheck:       cfg.OmlxCheck,
+		RetrievalDir:    cfg.RetrievalDir,
+		RetrievalRegime: cfg.RetrievalRegime,
 	})
 
 	t := strings.ToLower(strings.TrimSpace(cfg.Transport))

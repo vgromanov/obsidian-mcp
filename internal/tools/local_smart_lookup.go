@@ -55,6 +55,7 @@ func RegisterLocalSmartLookup(s *mcp.Server, d Deps) {
 		if err != nil {
 			return nil, nil, err
 		}
+		logRetrieval(d.RetrievalDir, d.RetrievalRegime, in.Query, body, raw)
 		return jsonResult(raw), nil, nil
 	})
 }

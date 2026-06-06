@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search_vault_local` MCP tool: semantic search via the Local Smart Lookup
   plugin (`POST /local-smart-lookup/search/`) with optional oMLX preflight
   (`OMLX_BASE_URL`, `OMLX_API_KEY`, `OBSIDIAN_OMLX_CHECK`).
+- Optional retrieval-event logging for `search_vault_local`: when
+  `OBSIDIAN_RETRIEVAL_DIR` is set, each call best-effort appends one JSONL line
+  (query, params, returned path/rank/score/rerankScore, regime, timestamp) to a
+  per-host shard `<dir>/<hostname>.jsonl`. Single-writer-per-host keeps it
+  conflict-free across file-synced workstations; logging never blocks or fails a
+  search. Regime tag via `OBSIDIAN_RETRIEVAL_REGIME`. Feeds the dream-cycle
+  offline memory-scoring pipeline.
 
 ### Removed
 
