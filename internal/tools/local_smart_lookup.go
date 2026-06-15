@@ -22,9 +22,12 @@ func RegisterLocalSmartLookup(s *mcp.Server, d Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "search_vault_local",
-		Description: "Question-first semantic search over the vault using local embeddings (oMLX), LanceDB vector index, " +
-			"and optional reranking in the Local Smart Lookup plugin. Returns chunk-level hits with path, text, score, " +
-			"and optional rerankScore. Narrow results with tags, frontmatter, where (LanceDB metadata), or Dataview source/query.",
+		Description: "Question-first hybrid search over the vault via the Local Smart Lookup plugin: local embeddings (oMLX) " +
+			"over a LanceDB vector index plus a BM25 full-text leg, reranked by a local cross-encoder and fused with " +
+			"Reciprocal Rank Fusion. Returns chunk-level hits already ordered by fusedScore; each hit includes path, text, " +
+			"score (vector), and optional rerankScore, ftsScore (BM25), fusedScore, and per-leg ranks. Trust the result order " +
+			"rather than any single score (rerankScore saturates near 1.0 for clearly-relevant hits). Narrow results with " +
+			"tags, frontmatter, where (LanceDB metadata), or Dataview source/query.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in localSearchIn) (*mcp.CallToolResult, any, error) {
 		if d.OmlxCheck {
 			if err := omlx.Check(ctx, d.OmlxBaseURL, d.OmlxAPIKey); err != nil {

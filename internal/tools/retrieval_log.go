@@ -20,6 +20,11 @@ type retrievalReturned struct {
 	Rank        int      `json:"rank"`
 	Score       *float64 `json:"score,omitempty"`
 	RerankScore *float64 `json:"rerankScore,omitempty"`
+	FusedScore  *float64 `json:"fusedScore,omitempty"`
+	FtsScore    *float64 `json:"ftsScore,omitempty"`
+	VectorRank  *int     `json:"vectorRank,omitempty"`
+	LexicalRank *int     `json:"lexicalRank,omitempty"`
+	RerankRank  *int     `json:"rerankRank,omitempty"`
 }
 
 type retrievalEvent struct {
@@ -64,12 +69,19 @@ func logRetrieval(dir, regime, query string, body map[string]any, raw json.RawMe
 		return
 	}
 
-	// Extract just path/score/rerankScore from the plugin's results.
+	// Extract path plus the per-leg scoring signals from the plugin's results.
+	// The plugin orders results by fusedScore (vector + BM25 + rerank via RRF),
+	// so position is the authoritative rank; the score fields enable tuning.
 	var parsed struct {
 		Results []struct {
 			Path        string   `json:"path"`
 			Score       *float64 `json:"score"`
 			RerankScore *float64 `json:"rerankScore"`
+			FusedScore  *float64 `json:"fusedScore"`
+			FtsScore    *float64 `json:"ftsScore"`
+			VectorRank  *int     `json:"vectorRank"`
+			LexicalRank *int     `json:"lexicalRank"`
+			RerankRank  *int     `json:"rerankRank"`
 		} `json:"results"`
 	}
 	_ = json.Unmarshal(raw, &parsed)
@@ -77,6 +89,8 @@ func logRetrieval(dir, regime, query string, body map[string]any, raw json.RawMe
 	for i, r := range parsed.Results {
 		returned = append(returned, retrievalReturned{
 			Path: r.Path, Rank: i, Score: r.Score, RerankScore: r.RerankScore,
+			FusedScore: r.FusedScore, FtsScore: r.FtsScore,
+			VectorRank: r.VectorRank, LexicalRank: r.LexicalRank, RerankRank: r.RerankRank,
 		})
 	}
 
