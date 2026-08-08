@@ -21,6 +21,8 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `delete_vault_file` | Local REST API | `DELETE /vault/...` |
 | `list_tags` | Local REST API | `GET /tags/` |
 | `get_tag_files` | Local REST API | `POST /search/` JsonLogic (`{"in":[<tag>,{"var":"tags"}]}`) — upstream has no per-tag route |
+| `list_frontmatter_keys` | Local Smart Lookup | `GET /frontmatter_keys/` (Properties inventory; not under `/si/*`) |
+| `get_frontmatter_key_files` | Local Smart Lookup | `GET /frontmatter_keys/{name}/` (files with that property; unknown → `[]`) |
 | `list_commands` | Local REST API | `GET /commands/` |
 | `execute_command` | Local REST API | `POST /commands/{commandId}/` (runs in Obsidian UI) |
 | `get_periodic_note` | Local REST API | `GET /periodic/{period}/` (current period only) |
@@ -32,7 +34,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** 26 tools (24 Local REST API + local semantic search + templater + fetch).
+**Count:** 28 tools (24 Local REST API + 2 Properties hygiene + local semantic search + templater + fetch).
 
 ### `search_vault_local` arguments
 
@@ -47,6 +49,14 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `where` | string | LanceDB SQL-style metadata filter (e.g. `type = 'note'`) |
 
 > Tag rename is intentionally not exposed: upstream Local REST API has no `PATCH /tags/{tag}/` route, and emulating it client-side (rewriting every matching file) is too risky for a tool an LLM might call by mistake. Use Obsidian's UI to rename tags vault-wide.
+
+### Properties hygiene (`list_frontmatter_keys` / `get_frontmatter_key_files`)
+
+Requires **Local Smart Lookup** with the `/frontmatter_keys*` extension routes (see that plugin's README). Use `list_frontmatter_keys` before inventing a new frontmatter key; prefer reusing an existing high-`count` property. `get_frontmatter_key_files` helps decide whether a rare key is a one-off.
+
+| Tool argument | Type | Notes |
+|---------------|------|-------|
+| `name` (`get_frontmatter_key_files`) | string | Property key (YAML / Obsidian Properties name) |
 
 ## Prerequisites
 
