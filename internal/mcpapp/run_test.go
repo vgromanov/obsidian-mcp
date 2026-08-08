@@ -131,6 +131,77 @@ func TestMCPToolListTags(t *testing.T) {
 	require.NotNil(t, res.StructuredContent)
 }
 
+func TestMCPToolListFrontmatterKeys(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/frontmatter_keys/", r.URL.Path)
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"workspace","count":3,"type":"text"}]`))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, testDeps(cli))
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "list_frontmatter_keys"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.Contains(t, txt, `"workspace"`)
+	require.Contains(t, txt, `"count"`)
+	require.Contains(t, txt, `"type"`)
+	require.NotNil(t, res.StructuredContent)
+}
+
+func TestMCPToolGetFrontmatterKeyFiles(t *testing.T) {
+	var sawPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		require.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"filename":"Notes/A.md"}]`))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, testDeps(cli))
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_frontmatter_key_files",
+		Arguments: map[string]any{"name": "workspace"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, "/frontmatter_keys/workspace/", sawPath)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"filename"`)
+	require.NotNil(t, res.StructuredContent)
+}
+
 func TestMCPToolExecuteCommand(t *testing.T) {
 	var sawPath, ct string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

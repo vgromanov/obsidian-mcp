@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `list_frontmatter_keys` and `get_frontmatter_key_files` MCP tools wrapping Local
+  Smart Lookup `GET /frontmatter_keys/` and `GET /frontmatter_keys/{name}/` for
+  Obsidian Properties hygiene (inventory + files-by-key).
 - `search_vault_local` MCP tool: semantic search via the Local Smart Lookup
   plugin (`POST /local-smart-lookup/search/`) with optional oMLX preflight
   (`OMLX_BASE_URL`, `OMLX_API_KEY`, `OBSIDIAN_OMLX_CHECK`).
