@@ -374,6 +374,32 @@ func (c *Client) GetTagFiles(ctx context.Context, tagname string) (json.RawMessa
 	return c.SearchVault(ctx, "jsonlogic", query)
 }
 
+// ListFrontmatterKeys GET /frontmatter_keys/ (Local Smart Lookup extension).
+func (c *Client) ListFrontmatterKeys(ctx context.Context) (json.RawMessage, error) {
+	opt := RequestOptions{Method: http.MethodGet, Path: "/frontmatter_keys/"}
+	_, b, err := c.Do(ctx, opt)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// GetFrontmatterKeyFiles GET /frontmatter_keys/{name}/ (Local Smart Lookup extension).
+// Unknown / unused keys return an empty list from the plugin (not 404).
+func (c *Client) GetFrontmatterKeyFiles(ctx context.Context, name string) (json.RawMessage, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("frontmatter key name is required")
+	}
+	path := "/frontmatter_keys/" + url.PathEscape(name) + "/"
+	opt := RequestOptions{Method: http.MethodGet, Path: path}
+	_, b, err := c.Do(ctx, opt)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
 // ListCommands GET /commands/
 func (c *Client) ListCommands(ctx context.Context) (json.RawMessage, error) {
 	opt := RequestOptions{Method: http.MethodGet, Path: "/commands/"}
