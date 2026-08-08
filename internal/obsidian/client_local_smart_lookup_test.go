@@ -31,7 +31,7 @@ func TestSearchVaultLocal(t *testing.T) {
 		{
 			name: "frontmatter",
 			body: map[string]any{
-				"query": "q",
+				"query":       "q",
 				"frontmatter": map[string]any{"status": "active", "project": "Local Search"},
 			},
 			want: `{"frontmatter":{"project":"Local Search","status":"active"},"query":"q"}`,
