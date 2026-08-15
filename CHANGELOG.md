@@ -37,11 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- SI tools no longer declare `offset` as Go `any` (JSON Schema literal `true`),
+  which caused strict MCP clients (Grok Bot) to reject `tools/list`. Offset
+  remains unsupported — use keyset `cursor`; `additionalProperties: false`
+  rejects unknown fields.
 - JSON-returning MCP tools now populate `structuredContent` instead of only
   pretty-printed JSON in `Content`, so clients and agents can consume structured
   results reliably. Array API responses are wrapped under a `data` key. The
   `fetch` tool exposes pagination metadata in `structuredContent` instead of a
   second plaintext JSON block.
+
 ## [0.1.0] - 2026-04-19
 
 Initial public release.

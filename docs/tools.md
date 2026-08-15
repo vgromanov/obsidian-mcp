@@ -34,10 +34,10 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `si_health` | Local Smart Lookup SI | `GET /si/health/` |
 | `si_index_info` | Local Smart Lookup SI | `GET /si/index_info/` |
 | `si_embed_text` | Local Smart Lookup SI | `POST /si/embed_text/` |
-| `si_query_metadata` | Local Smart Lookup SI | `POST /si/query_metadata/` (rejects numeric `offset`) |
+| `si_query_metadata` | Local Smart Lookup SI | `POST /si/query_metadata/` (no `offset`; use `cursor`) |
 | `si_knn` | Local Smart Lookup SI | `POST /si/knn/` (requires `type` in `where`; exactly one of `text`/`vector`/`chunk_id`) |
 | `si_count_neighbors` | Local Smart Lookup SI | `POST /si/count_neighbors/` (same corpus + query XOR as `si_knn`) |
-| `si_get_vectors` | Local Smart Lookup SI | `POST /si/get_vectors/` (requires `type` in `where`; rejects `offset`) |
+| `si_get_vectors` | Local Smart Lookup SI | `POST /si/get_vectors/` (requires `type` in `where`; no `offset`; use `cursor`) |
 | `si_filter_validate` | Local Smart Lookup SI | `POST /si/filter/validate/` |
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
@@ -75,7 +75,7 @@ Requires **Local Smart Lookup** with `/si/*` routes (trailing slashes). These wr
 | `si_health` | — | Liveness |
 | `si_index_info` | — | Regime stamp (`embed_model` / `embed_dim` / `schema_ver`) |
 | `si_embed_text` | `texts`, `normalize?` | Index-consistent embeddings |
-| `si_query_metadata` | `where`, `fields`, `limit?`, `cursor?` | Keyset scan; `offset` rejected |
+| `si_query_metadata` | `where`, `fields`, `limit?`, `cursor?` | Keyset scan; `offset` not in schema |
 | `si_knn` | `where`, exactly one of `text` / `vector` / `chunk_id`, `k?`, `threshold?` | `where` must contain `"type"`; `text` embeds internally and does **not** return the query vector |
 | `si_count_neighbors` | same query XOR + required `threshold`, `group_by`, `where` | Exact grouped counts |
 | `si_get_vectors` | `where`, `include_text?`, `limit?`, `cursor?` | Vector export; keep off public MCP allowlists |

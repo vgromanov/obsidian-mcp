@@ -66,16 +66,15 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		Fields []string `json:"fields"`
 		Limit  *int     `json:"limit,omitempty"`
 		Cursor *string  `json:"cursor,omitempty"`
-		Offset any      `json:"offset,omitempty"`
+		// Do not declare offset: interface{} / any infers JSON Schema `true`
+		// (invalid for strict MCP clients such as Grok Bot). Offset is unsupported;
+		// additionalProperties:false rejects it at the schema layer.
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "si_query_metadata",
 		Description: "Metadata-only keyset scan over the LanceDB index (POST /si/query_metadata/). " +
-			"Requires where and fields. Use cursor for paging — numeric offset is rejected. No embeddings, no rerank.",
+			"Requires where and fields. Use cursor for paging — numeric offset is not supported. No embeddings, no rerank.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in queryMetaIn) (*mcp.CallToolResult, any, error) {
-		if in.Offset != nil {
-			return nil, nil, fmt.Errorf("numeric offset is not supported; use keyset cursor")
-		}
 		raw, err := cli.SIQueryMetadata(ctx, obsidian.SIQueryMetadataParams{
 			Where:  in.Where,
 			Fields: in.Fields,
@@ -177,17 +176,15 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		IncludeText bool    `json:"include_text,omitempty"`
 		Limit       *int    `json:"limit,omitempty"`
 		Cursor      *string `json:"cursor,omitempty"`
-		Offset      any     `json:"offset,omitempty"`
+		// Do not declare offset: interface{} / any infers JSON Schema `true`
+		// (invalid for strict MCP clients). Offset is unsupported; use cursor.
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "si_get_vectors",
 		Description: "Cursor-paged vector export for offline clustering (POST /si/get_vectors/). " +
-			"where must include a corpus type filter. Numeric offset is rejected — use cursor. " +
+			"where must include a corpus type filter. Numeric offset is not supported — use cursor. " +
 			"Do not expose this tool on public MCP gateways without an allowlist.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getVectorsIn) (*mcp.CallToolResult, any, error) {
-		if in.Offset != nil {
-			return nil, nil, fmt.Errorf("numeric offset is not supported; use keyset cursor")
-		}
 		raw, err := cli.SIGetVectors(ctx, obsidian.SIGetVectorsParams{
 			Where:       in.Where,
 			IncludeText: in.IncludeText,
