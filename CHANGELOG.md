@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Eight Semantic Index MCP tools wrapping Local Smart Lookup `/si/*` routes
+  (trailing slashes): `si_health`, `si_index_info`, `si_embed_text`,
+  `si_query_metadata`, `si_knn`, `si_count_neighbors`, `si_get_vectors`,
+  `si_filter_validate`. Neighbor tools require a corpus `type` filter in
+  `where`; `si_knn` / `si_count_neighbors` accept exactly one of `text` /
+  `vector` / `chunk_id` (text embeds via `/si/embed_text/` and does not echo
+  the query vector). Numeric `offset` is rejected on metadata/vector paging.
 - `list_frontmatter_keys` and `get_frontmatter_key_files` MCP tools wrapping Local
   Smart Lookup `GET /frontmatter_keys/` and `GET /frontmatter_keys/{name}/` for
   Obsidian Properties hygiene (inventory + files-by-key).

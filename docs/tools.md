@@ -31,10 +31,18 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `patch_periodic_note` | Local REST API | `PATCH /periodic/{period}/` |
 | `delete_periodic_note` | Local REST API | `DELETE /periodic/{period}/` |
 | `search_vault_local` | Local Smart Lookup | `POST /local-smart-lookup/search/` (extension route; optional oMLX preflight) |
+| `si_health` | Local Smart Lookup SI | `GET /si/health/` |
+| `si_index_info` | Local Smart Lookup SI | `GET /si/index_info/` |
+| `si_embed_text` | Local Smart Lookup SI | `POST /si/embed_text/` |
+| `si_query_metadata` | Local Smart Lookup SI | `POST /si/query_metadata/` (rejects numeric `offset`) |
+| `si_knn` | Local Smart Lookup SI | `POST /si/knn/` (requires `type` in `where`; exactly one of `text`/`vector`/`chunk_id`) |
+| `si_count_neighbors` | Local Smart Lookup SI | `POST /si/count_neighbors/` (same corpus + query XOR as `si_knn`) |
+| `si_get_vectors` | Local Smart Lookup SI | `POST /si/get_vectors/` (requires `type` in `where`; rejects `offset`) |
+| `si_filter_validate` | Local Smart Lookup SI | `POST /si/filter/validate/` |
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** 28 tools (24 Local REST API + 2 Properties hygiene + local semantic search + templater + fetch).
+**Count:** 36 tools (24 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch).
 
 ### `search_vault_local` arguments
 
@@ -58,11 +66,28 @@ Requires **Local Smart Lookup** with the `/frontmatter_keys*` extension routes (
 |---------------|------|-------|
 | `name` (`get_frontmatter_key_files`) | string | Property key (YAML / Obsidian Properties name) |
 
+### Semantic Index (`si_*`)
+
+Requires **Local Smart Lookup** with `/si/*` routes (trailing slashes). These wrap the mining/query API used by dreamcycle: no cross-encoder rerank; cosine **distance** thresholds are inclusive (`<=`).
+
+| Tool | Key arguments | Notes |
+|------|---------------|-------|
+| `si_health` | — | Liveness |
+| `si_index_info` | — | Regime stamp (`embed_model` / `embed_dim` / `schema_ver`) |
+| `si_embed_text` | `texts`, `normalize?` | Index-consistent embeddings |
+| `si_query_metadata` | `where`, `fields`, `limit?`, `cursor?` | Keyset scan; `offset` rejected |
+| `si_knn` | `where`, exactly one of `text` / `vector` / `chunk_id`, `k?`, `threshold?` | `where` must contain `"type"`; `text` embeds internally and does **not** return the query vector |
+| `si_count_neighbors` | same query XOR + required `threshold`, `group_by`, `where` | Exact grouped counts |
+| `si_get_vectors` | `where`, `include_text?`, `limit?`, `cursor?` | Vector export; keep off public MCP allowlists |
+| `si_filter_validate` | `where?`, `filter?`, `limit?` | Compile + live sample |
+
+> Do not deploy binaries that expose `si_get_vectors` / `si_embed_text` on a public gateway until an allowlist filters them.
+
 ## Prerequisites
 
 - **Local REST API** or **[obsidian-api](https://github.com/vigeron/obsidian-api)** with extension support (required).
 - **obsidian-mcp-tools** Obsidian plugin (required for `/templates/execute` and vault prompts — this Go binary replaces only the **downloaded MCP server**, not those routes).
-- **Local Smart Lookup** (`local-smart-lookup` plugin) + **oMLX** on `http://127.0.0.1:8000/v1` with embedding model loaded (required for `search_vault_local`). Set the plugin **Embedding server** to the same host as `OMLX_BASE_URL`.
+- **Local Smart Lookup** (`local-smart-lookup` plugin) + **oMLX** on `http://127.0.0.1:8000/v1` with embedding model loaded (required for `search_vault_local` and `si_*`). Set the plugin **Embedding server** to the same host as `OMLX_BASE_URL`.
 - **Dataview** (optional; required when using `dataviewSource` / `dataviewQuery` on `search_vault_local`).
 - **Templater** (required for `execute_template` and vault prompts).
 - **Periodic Notes** (community plugin) configured in Obsidian — required for `/periodic/...` tools to resolve notes; the Local REST API returns errors if the plugin is missing or a period is disabled.
