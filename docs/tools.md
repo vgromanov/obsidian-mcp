@@ -77,7 +77,7 @@ Requires **Local Smart Lookup** with `/si/*` routes (trailing slashes). These wr
 | `si_embed_text` | `texts`, `normalize?` | Index-consistent embeddings |
 | `si_query_metadata` | `where`, `fields`, `limit?`, `cursor?` | Keyset scan; `offset` rejected |
 | `si_knn` | `where`, exactly one of `text` / `vector` / `chunk_id`, `k?`, `threshold?` | `where` must contain `"type"`; `text` embeds internally and does **not** return the query vector |
-| `si_count_neighbors` | same query XOR + `threshold`, `group_by`, `where` | Exact grouped counts |
+| `si_count_neighbors` | same query XOR + required `threshold`, `group_by`, `where` | Exact grouped counts |
 | `si_get_vectors` | `where`, `include_text?`, `limit?`, `cursor?` | Vector export; keep off public MCP allowlists |
 | `si_filter_validate` | `where?`, `filter?`, `limit?` | Compile + live sample |
 

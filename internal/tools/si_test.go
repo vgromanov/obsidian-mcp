@@ -27,6 +27,12 @@ func TestResolveSIQueryXOR(t *testing.T) {
 	require.Contains(t, err.Error(), "exactly one")
 }
 
+func TestRequireSIToolCorpusWhere(t *testing.T) {
+	require.Error(t, requireSIToolCorpusWhere(""))
+	require.Error(t, requireSIToolCorpusWhere("workspace = 'x'"))
+	require.NoError(t, requireSIToolCorpusWhere("type = 'note'"))
+}
+
 func TestResolveSIQueryTextEmbedsWithoutEcho(t *testing.T) {
 	var paths []string
 	var knnBody map[string]any

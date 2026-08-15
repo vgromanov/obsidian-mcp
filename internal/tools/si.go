@@ -104,6 +104,9 @@ func RegisterSi(s *mcp.Server, d Deps) {
 			"If text is set, the tool embeds via /si/embed_text/ first and does not return the query vector. " +
 			"threshold is cosine distance (inclusive <=).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in knnIn) (*mcp.CallToolResult, any, error) {
+		if err := requireSIToolCorpusWhere(in.Where); err != nil {
+			return nil, nil, err
+		}
 		vector, chunkID, err := resolveSIQuery(ctx, cli, in.Text, in.Vector, in.ChunkID)
 		if err != nil {
 			return nil, nil, err
@@ -129,7 +132,7 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		Text      *string   `json:"text,omitempty"`
 		Vector    []float64 `json:"vector,omitempty"`
 		ChunkID   *string   `json:"chunk_id,omitempty"`
-		Threshold float64   `json:"threshold"`
+		Threshold *float64  `json:"threshold"`
 		Metric    *string   `json:"metric,omitempty"`
 		GroupBy   string    `json:"group_by"`
 		Where     string    `json:"where"`
@@ -139,8 +142,15 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		Description: "Exact grouped neighbor counts within a cosine-distance threshold (POST /si/count_neighbors/). " +
 			"where must include a corpus type filter. Provide exactly one of text, vector, or chunk_id. " +
 			"If text is set, embeds via /si/embed_text/ and does not return the query vector. " +
-			"group_by: uuid | project | workspace | date_bucket | path. Threshold is inclusive (<=).",
+			"threshold is required (cosine distance, inclusive <=). " +
+			"group_by: uuid | project | workspace | date_bucket | path.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {
+		if err := requireSIToolCorpusWhere(in.Where); err != nil {
+			return nil, nil, err
+		}
+		if in.Threshold == nil {
+			return nil, nil, fmt.Errorf("threshold is required (cosine distance, inclusive <=)")
+		}
 		vector, chunkID, err := resolveSIQuery(ctx, cli, in.Text, in.Vector, in.ChunkID)
 		if err != nil {
 			return nil, nil, err
@@ -148,7 +158,7 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		p := obsidian.SICountNeighborsParams{
 			Vector:    vector,
 			ChunkID:   chunkID,
-			Threshold: in.Threshold,
+			Threshold: *in.Threshold,
 			GroupBy:   in.GroupBy,
 			Where:     in.Where,
 		}
@@ -210,6 +220,13 @@ func RegisterSi(s *mcp.Server, d Deps) {
 		}
 		return jsonResult(raw), nil, nil
 	})
+}
+
+func requireSIToolCorpusWhere(where string) error {
+	if where == "" || !strings.Contains(where, "type") {
+		return fmt.Errorf("requires an explicit corpus-type where filter")
+	}
+	return nil
 }
 
 // resolveSIQuery enforces exactly one of text | vector | chunk_id.

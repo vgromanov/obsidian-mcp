@@ -572,7 +572,9 @@ func TestMCPToolSIHealth(t *testing.T) {
 }
 
 func TestMCPToolSIKnnRejectsMissingType(t *testing.T) {
+	called := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
 		t.Fatal("HTTP should not be called")
 	}))
 	t.Cleanup(ts.Close)
@@ -585,13 +587,37 @@ func TestMCPToolSIKnnRejectsMissingType(t *testing.T) {
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "si_knn",
 		Arguments: map[string]any{
-			"vector": []any{0.1, 0.2},
-			"where":  "workspace = 'x'",
+			"text":  "should not embed",
+			"where": "workspace = 'x'",
 		},
 	})
 	require.NoError(t, err)
 	require.True(t, res.IsError)
+	require.False(t, called)
 	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "corpus-type")
+}
+
+func TestMCPToolSICountNeighborsRequiresThreshold(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP should not be called")
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	_, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "si_count_neighbors",
+		Arguments: map[string]any{
+			"chunk_id": "p#h#0",
+			"group_by": "uuid",
+			"where":    "type = 'note'",
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "threshold")
 }
 
 func TestMCPToolSIKnnTextPathNoVectorEcho(t *testing.T) {
