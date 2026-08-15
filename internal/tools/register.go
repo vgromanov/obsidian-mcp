@@ -4,7 +4,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// RegisterAll registers every Obsidian MCP tool (36 total).
+// RegisterAll registers every Obsidian MCP tool (37 total).
 func RegisterAll(s *mcp.Server, d Deps) {
 	RegisterLocalREST(s, d)
 	RegisterTags(s, d)

@@ -700,7 +700,7 @@ func TestMCPToolSIQueryMetadataRejectsOffset(t *testing.T) {
 	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
 	ctx, cs := mcpSession(t, cli)
 
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+	_, err = cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "si_query_metadata",
 		Arguments: map[string]any{
 			"where":  "type = 'note'",
@@ -708,9 +708,10 @@ func TestMCPToolSIQueryMetadataRejectsOffset(t *testing.T) {
 			"offset": float64(10),
 		},
 	})
-	require.NoError(t, err)
-	require.True(t, res.IsError)
-	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "offset")
+	// offset is not in the input schema (any→JSON Schema true broke Grok Bot);
+	// additionalProperties:false rejects it before the handler runs.
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "offset")
 }
 
 func TestMCPToolSIGetVectorsRejectsMissingType(t *testing.T) {
