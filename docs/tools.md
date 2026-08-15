@@ -42,8 +42,8 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 |----------|------|-------|
 | `query` | string | Required natural-language question |
 | `limit` | number | Max chunk results (plugin default if omitted) |
-| `dataviewSource` | string | Dataview source expression to narrow paths before vector search |
-| `dataviewQuery` | string | Full Dataview DQL to resolve allowed paths |
+| `dataviewSource` | string | Compatible alias for a bare Dataview source (`#tag`, `"Folder"`). Local Smart Lookup wraps it as `LIST FROM …` and runs it via `api.query` (same safe path as `dataviewQuery`). Prefer `dataviewQuery` for full DQL. |
+| `dataviewQuery` | string | Full Dataview DQL (`LIST`/`TABLE`/`TASK`/`CALENDAR`) to resolve allowed paths (preferred) |
 | `tags` | string[] | LanceDB metadata filter (frontmatter or inline tags) |
 | `frontmatter` | object | LanceDB metadata filter on indexed scalar frontmatter fields |
 | `where` | string | LanceDB SQL-style metadata filter (e.g. `type = 'note'`) |
