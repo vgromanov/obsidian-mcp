@@ -10,7 +10,7 @@ A single-binary [Model Context Protocol](https://modelcontextprotocol.io/) serve
 
 ## What it gives you
 
-- **26 MCP tools** covering the full [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD, search, open, tags, commands, periodic notes), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
+- **36 MCP tools** covering the full [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD, search, open, tags, commands, periodic notes), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Semantic Index mining tools (`si_*` over `/si/*`), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
 - **Vault-backed prompts** — any note tagged `mcp-tools-prompt` in your prompts folder is exposed as an MCP prompt, executed through Templater on the Obsidian side. See [docs/prompts.md](docs/prompts.md).
 - **Two transports** — `stdio` (default) for editor integrations, `--transport=http` for shared local use.
 - **Single static binary** (~12 MB), no runtime dependencies, easy to ship.
@@ -26,7 +26,7 @@ Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrap
 | [Obsidian](https://obsidian.md/) | All tools |
 | [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin | All tools |
 | [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools) plugin | `execute_template`, vault prompts |
-| **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local` |
+| **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local`, `si_*` |
 | [Templater](https://github.com/SilentVoid13/Templater) | `execute_template` and dynamic prompts |
 | [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) | `*_periodic_note` tools |
 | [Dataview](https://github.com/blacksmithgu/obsidian-dataview) | Optional filters on `search_vault_local` |

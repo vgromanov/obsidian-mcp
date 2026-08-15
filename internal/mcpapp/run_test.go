@@ -2,6 +2,7 @@ package mcpapp
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -532,4 +533,201 @@ func TestMCPToolSearchVaultLocalOmlxPreflightPasses(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	require.Equal(t, "/local-smart-lookup/search/", sawPath)
+}
+
+func mcpSession(t *testing.T, cli *obsidian.Client) (context.Context, *mcp.ClientSession) {
+	t.Helper()
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := NewMCPServer(nil, testDeps(cli))
+	_, err := srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+	return ctx, cs
+}
+
+func TestMCPToolSIHealth(t *testing.T) {
+	var sawPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		require.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"chunks":2}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "si_health"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, "/si/health/", sawPath)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"ok"`)
+}
+
+func TestMCPToolSIKnnRejectsMissingType(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP should not be called")
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "si_knn",
+		Arguments: map[string]any{
+			"vector": []any{0.1, 0.2},
+			"where":  "workspace = 'x'",
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "corpus-type")
+}
+
+func TestMCPToolSIKnnTextPathNoVectorEcho(t *testing.T) {
+	var paths []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/si/embed_text/":
+			require.Contains(t, string(body), `"texts"`)
+			_, _ = w.Write([]byte(`{"vectors":[[0.1,0.2]],"embed_dim":2}`))
+		case "/si/knn/":
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(body, &got))
+			require.Contains(t, got, "vector")
+			require.NotContains(t, got, "text")
+			_, _ = w.Write([]byte(`{"hits":[{"chunk_id":"c","distance":0.05}],"k":5,"metric":"cosine"}`))
+		default:
+			t.Fatalf("unexpected %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "si_knn",
+		Arguments: map[string]any{
+			"text":  "find similar patterns",
+			"where": "type = 'session-summary'",
+			"k":     float64(5),
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, []string{"/si/embed_text/", "/si/knn/"}, paths)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.Contains(t, txt, `"hits"`)
+	require.NotContains(t, txt, `"vectors"`)
+	require.NotContains(t, txt, `"query_vector"`)
+	require.NotContains(t, txt, "0.1")
+}
+
+func TestMCPToolSIKnnRejectsQueryXOR(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP should not be called")
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "si_knn",
+		Arguments: map[string]any{
+			"text":     "a",
+			"chunk_id": "p#h#0",
+			"where":    "type = 'note'",
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "exactly one")
+}
+
+func TestMCPToolSIQueryMetadataRejectsOffset(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP should not be called")
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "si_query_metadata",
+		Arguments: map[string]any{
+			"where":  "type = 'note'",
+			"fields": []any{"path"},
+			"offset": float64(10),
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "offset")
+}
+
+func TestMCPToolSIGetVectorsRejectsMissingType(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("HTTP should not be called")
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "si_get_vectors",
+		Arguments: map[string]any{"where": "workspace = 'x'"},
+	})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "corpus-type")
+}
+
+func TestMCPToolSIFilterValidate(t *testing.T) {
+	var sawPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPath = r.URL.Path
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"sql":"type = 'note'","row_count":1,"sample":[]}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "si_filter_validate",
+		Arguments: map[string]any{"where": "type = 'note'"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Equal(t, "/si/filter/validate/", sawPath)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"row_count"`)
 }
