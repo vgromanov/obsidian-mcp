@@ -12,6 +12,8 @@ const defaultVaultReadMaxLength = 32768
 
 // paginateBytes slices content by byte indices (same model as fetch: Go string
 // indexing is byte-oriented). start is clamped to [0, len(content)].
+// Non-positive maxLength is treated as defaultVaultReadMaxLength so a zero-width
+// page cannot stall agents with hasMore + the same startIndex.
 func paginateBytes(content string, maxLength, startIndex int) (slice string, start, end, total int, hasMore bool) {
 	total = len(content)
 	start = startIndex
@@ -21,8 +23,8 @@ func paginateBytes(content string, maxLength, startIndex int) (slice string, sta
 	if start > total {
 		start = total
 	}
-	if maxLength < 0 {
-		maxLength = 0
+	if maxLength <= 0 {
+		maxLength = defaultVaultReadMaxLength
 	}
 	end = start + maxLength
 	if end > total {
@@ -37,6 +39,9 @@ func resolvePaginationBounds(maxLength, startIndex *int, defaultMax int) (maxLen
 	maxLen = defaultMax
 	if maxLength != nil {
 		maxLen = *maxLength
+	}
+	if maxLen <= 0 {
+		maxLen = defaultMax
 	}
 	if startIndex != nil {
 		start = *startIndex

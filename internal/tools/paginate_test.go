@@ -37,12 +37,32 @@ func TestPaginateBytesClampsStart(t *testing.T) {
 }
 
 func TestPaginateBytesNegativeBounds(t *testing.T) {
+	// Non-positive maxLength must not create a zero-width stall page.
 	slice, start, end, total, hasMore := paginateBytes("abcd", -5, -2)
-	require.Equal(t, "", slice)
+	require.Equal(t, "abcd", slice)
 	require.Equal(t, 0, start)
-	require.Equal(t, 0, end)
+	require.Equal(t, 4, end)
 	require.Equal(t, 4, total)
-	require.True(t, hasMore)
+	require.False(t, hasMore)
+
+	slice, start, end, total, hasMore = paginateBytes("abcd", 0, 0)
+	require.Equal(t, "abcd", slice)
+	require.Equal(t, 0, start)
+	require.Equal(t, 4, end)
+	require.Equal(t, 4, total)
+	require.False(t, hasMore)
+}
+
+func TestResolvePaginationBoundsClampsNonPositiveMaxLength(t *testing.T) {
+	zero := 0
+	neg := -1
+	maxLen, start := resolvePaginationBounds(&zero, nil, defaultVaultReadMaxLength)
+	require.Equal(t, defaultVaultReadMaxLength, maxLen)
+	require.Equal(t, 0, start)
+
+	maxLen, start = resolvePaginationBounds(&neg, nil, defaultVaultReadMaxLength)
+	require.Equal(t, defaultVaultReadMaxLength, maxLen)
+	require.Equal(t, 0, start)
 }
 
 func TestPaginatedTextResultNotice(t *testing.T) {

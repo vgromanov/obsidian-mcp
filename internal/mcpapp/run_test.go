@@ -821,6 +821,43 @@ func TestMCPToolGetVaultFileLargeDefaultTruncation(t *testing.T) {
 	require.Equal(t, float64(32768), pagination["endIndex"])
 }
 
+func TestMCPToolGetVaultFileMaxLengthZeroUsesDefault(t *testing.T) {
+	large := strings.Repeat("C", 40*1024)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(large))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "get_vault_file",
+		Arguments: map[string]any{
+			"filename":  "Notes/zero-max.md",
+			"maxLength": float64(0),
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.True(t, strings.HasPrefix(txt, strings.Repeat("C", 32768)))
+	require.Contains(t, txt, "startIndex=32768")
+	require.NotContains(t, txt, "startIndex=0\n")
+	require.Less(t, len(txt), 50*1024)
+	structured := res.StructuredContent.(map[string]any)
+	pagination := structured["pagination"].(map[string]any)
+	require.Equal(t, true, pagination["hasMore"])
+	require.Equal(t, float64(0), pagination["startIndex"])
+	require.Equal(t, float64(32768), pagination["endIndex"])
+	require.Equal(t, float64(40960), pagination["totalLength"])
+	// Must not return an empty stall page.
+	content, _ := structured["content"].(string)
+	require.Len(t, content, 32768)
+}
+
 func TestMCPToolGetVaultFileSecondPage(t *testing.T) {
 	large := strings.Repeat("B", 1000)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
