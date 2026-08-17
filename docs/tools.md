@@ -14,10 +14,10 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `search_vault` | Local REST API | `POST /search/` (Dataview / JsonLogic) |
 | `search_vault_simple` | Local REST API | `POST /search/simple/` |
 | `list_vault_files` | Local REST API | `GET /vault/` |
-| `get_vault_file` | Local REST API | `GET /vault/...` |
+| `get_vault_file` | Local REST API | `GET /vault/...` — paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown |
 | `create_vault_file` | Local REST API | `PUT /vault/...` |
 | `append_to_vault_file` | Local REST API | `POST /vault/...` |
-| `patch_vault_file` | Local REST API | `PATCH /vault/...` |
+| `patch_vault_file` | Local REST API | `PATCH /vault/...` — response body capped with same `maxLength`/`startIndex` as `get_vault_file` |
 | `delete_vault_file` | Local REST API | `DELETE /vault/...` |
 | `list_tags` | Local REST API | `GET /tags/` |
 | `get_tag_files` | Local REST API | `POST /search/` JsonLogic (`{"in":[<tag>,{"var":"tags"}]}`) — upstream has no per-tag route |
@@ -57,6 +57,19 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `where` | string | LanceDB SQL-style metadata filter (e.g. `type = 'note'`) |
 
 > Tag rename is intentionally not exposed: upstream Local REST API has no `PATCH /tags/{tag}/` route, and emulating it client-side (rewriting every matching file) is too risky for a tool an LLM might call by mistake. Use Obsidian's UI to rename tags vault-wide.
+
+### `get_vault_file` / `patch_vault_file` pagination
+
+Large notes can exceed Cursor's ~50 KB inline tool-result limit. Both tools slice the **returned text by bytes** (same model as `fetch`) and never declare a field named `offset` (that produced JSON Schema `true` and broke Grok Bot `tools/list` — see RVG-104).
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `filename` | string | Vault-relative path (required) |
+| `format` | string | Optional; `json` returns the note JSON envelope when the payload fits in one page. Omit for markdown (preferred for agents). |
+| `maxLength` | integer | Max bytes per page. Default **32768** for vault reads (unlike `fetch`, which defaults to 5000). |
+| `startIndex` | integer | Byte index into the returned text for the next page (from the overflow notice / `pagination.endIndex`). |
+
+On overflow the text includes a short notice (`file too large (N bytes); call again with startIndex=…`) and `structuredContent.pagination` exposes `totalLength`, `startIndex`, `endIndex`, and `hasMore`. `patch_vault_file` applies the same cap to the post-patch body. Pagination is an MCP response concern — the Local REST call still fetches the full file.
 
 ### Properties hygiene (`list_frontmatter_keys` / `get_frontmatter_key_files`)
 
