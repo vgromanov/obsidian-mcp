@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -152,22 +153,39 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 	})
 
 	type getVaultIn struct {
-		Filename string  `json:"filename"`
-		Format   *string `json:"format,omitempty"`
+		Filename   string  `json:"filename"`
+		Format     *string `json:"format,omitempty"`
+		MaxLength  *int    `json:"maxLength,omitempty"`
+		StartIndex *int    `json:"startIndex,omitempty"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_vault_file",
-		Description: "Get the content of a file from your vault.",
+		Name: "get_vault_file",
+		Description: "Get the content of a file from your vault. Supports pagination through maxLength " +
+			"(default 32768 bytes) and startIndex so large notes stay under client inline limits. " +
+			"Omit format for markdown; format=json returns a note JSON envelope when the payload fits.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getVaultIn) (*mcp.CallToolResult, any, error) {
 		asJSON := in.Format != nil && *in.Format == "json"
 		b, err := cli.GetVaultFile(ctx, in.Filename, asJSON)
 		if err != nil {
 			return nil, nil, err
 		}
+		display := string(b)
 		if asJSON {
+			var v any
+			if err := json.Unmarshal(b, &v); err == nil {
+				structured := toStructuredObject(v)
+				if text, err := json.Marshal(structured); err == nil {
+					display = string(text)
+				}
+			}
+		}
+		maxLen, start := resolvePaginationBounds(in.MaxLength, in.StartIndex, defaultVaultReadMaxLength)
+		slice, start, end, total, hasMore := paginateBytes(display, maxLen, start)
+		// Small JSON notes: keep prior jsonResult shape (structured object, no truncation notice).
+		if asJSON && start == 0 && !hasMore {
 			return jsonResult(b), nil, nil
 		}
-		return textResult(string(b)), nil, nil
+		return paginatedTextResult(in.Filename, slice, start, end, total, hasMore), nil, nil
 	})
 
 	type putVaultIn struct {
@@ -197,16 +215,19 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 	type patchVaultIn struct {
 		Filename string `json:"filename"`
 		obsidian.PatchParams
+		MaxLength  *int `json:"maxLength,omitempty"`
+		StartIndex *int `json:"startIndex,omitempty"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "patch_vault_file",
-		Description: "Insert or modify content in a file relative to a heading, block reference, or frontmatter field.",
+		Name: "patch_vault_file",
+		Description: "Insert or modify content in a file relative to a heading, block reference, or frontmatter field. " +
+			"The returned file body is capped with the same maxLength (default 32768) / startIndex pagination as get_vault_file.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in patchVaultIn) (*mcp.CallToolResult, any, error) {
 		body, err := cli.PatchVaultFile(ctx, in.Filename, in.PatchParams)
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult2("File patched successfully", body), nil, nil
+		return paginatedTextResult2("File patched successfully", in.Filename, body, in.MaxLength, in.StartIndex), nil, nil
 	})
 
 	type delVaultIn struct {

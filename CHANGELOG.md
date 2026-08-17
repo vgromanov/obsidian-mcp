@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `get_vault_file` pagination via typed `maxLength` / `startIndex` (default
+  maxLength **32768** bytes) so large notes stay under Cursor's ~50 KB inline
+  spill; overflow notice + `structuredContent.pagination` (`totalLength`,
+  `startIndex`, `endIndex`, `hasMore`). `patch_vault_file` caps its returned
+  body the same way. Field is never named `offset` (RVG-104 schema gotcha).
+  `fetch` defaults unchanged (5000).
 - Eight Semantic Index MCP tools wrapping Local Smart Lookup `/si/*` routes
   (trailing slashes): `si_health`, `si_index_info`, `si_embed_text`,
   `si_query_metadata`, `si_knn`, `si_count_neighbors`, `si_get_vectors`,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -757,4 +758,252 @@ func TestMCPToolSIFilterValidate(t *testing.T) {
 	require.False(t, res.IsError)
 	require.Equal(t, "/si/filter/validate/", sawPath)
 	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, `"row_count"`)
+}
+
+func TestMCPToolGetVaultFileSmallNoTruncation(t *testing.T) {
+	const body = "# small note\nhello world\n"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Contains(t, r.URL.Path, "small.md")
+		require.Equal(t, "text/markdown", r.Header.Get("Accept"))
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_vault_file",
+		Arguments: map[string]any{"filename": "small.md"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.Equal(t, body, txt)
+	require.NotContains(t, txt, "file too large")
+	structured := res.StructuredContent.(map[string]any)
+	pagination := structured["pagination"].(map[string]any)
+	require.Equal(t, false, pagination["hasMore"])
+	require.Equal(t, float64(len(body)), pagination["totalLength"])
+}
+
+func TestMCPToolGetVaultFileLargeDefaultTruncation(t *testing.T) {
+	large := strings.Repeat("A", 40*1024)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "text/markdown", r.Header.Get("Accept"))
+		_, _ = w.Write([]byte(large))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_vault_file",
+		Arguments: map[string]any{"filename": "Notes/large.md"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.Contains(t, txt, "file too large (40960 bytes)")
+	require.Contains(t, txt, "startIndex=32768")
+	require.Less(t, len(txt), 50*1024)
+	require.True(t, strings.HasPrefix(txt, strings.Repeat("A", 32768)))
+	structured := res.StructuredContent.(map[string]any)
+	pagination := structured["pagination"].(map[string]any)
+	require.Equal(t, true, pagination["hasMore"])
+	require.Equal(t, float64(40960), pagination["totalLength"])
+	require.Equal(t, float64(0), pagination["startIndex"])
+	require.Equal(t, float64(32768), pagination["endIndex"])
+}
+
+func TestMCPToolGetVaultFileSecondPage(t *testing.T) {
+	large := strings.Repeat("B", 1000)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(large))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "get_vault_file",
+		Arguments: map[string]any{
+			"filename":   "Notes/paged.md",
+			"maxLength":  float64(100),
+			"startIndex": float64(200),
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.True(t, strings.HasPrefix(txt, strings.Repeat("B", 100)))
+	require.Contains(t, txt, "startIndex=300")
+	structured := res.StructuredContent.(map[string]any)
+	pagination := structured["pagination"].(map[string]any)
+	require.Equal(t, float64(200), pagination["startIndex"])
+	require.Equal(t, float64(300), pagination["endIndex"])
+	require.Equal(t, true, pagination["hasMore"])
+}
+
+func TestMCPToolGetVaultFileFormatJSONSmall(t *testing.T) {
+	note := `{"content":"hi","frontmatter":{},"path":"Notes/j.md","stat":{"ctime":1,"mtime":1,"size":2},"tags":[]}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "application/vnd.olrapi.note+json", r.Header.Get("Accept"))
+		w.Header().Set("Content-Type", "application/vnd.olrapi.note+json")
+		_, _ = w.Write([]byte(note))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_vault_file",
+		Arguments: map[string]any{"filename": "Notes/j.md", "format": "json"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotContains(t, res.Content[0].(*mcp.TextContent).Text, "file too large")
+	structured := res.StructuredContent.(map[string]any)
+	require.Equal(t, "hi", structured["content"])
+	require.Equal(t, "Notes/j.md", structured["path"])
+}
+
+func TestMCPToolGetVaultFileFormatJSONLargeTruncates(t *testing.T) {
+	bigContent := strings.Repeat("Z", 40*1024)
+	noteObj := map[string]any{
+		"content":     bigContent,
+		"frontmatter": map[string]any{},
+		"path":        "Notes/bigjson.md",
+		"stat":        map[string]any{"ctime": 1, "mtime": 1, "size": len(bigContent)},
+		"tags":        []any{},
+	}
+	raw, err := json.Marshal(noteObj)
+	require.NoError(t, err)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "application/vnd.olrapi.note+json", r.Header.Get("Accept"))
+		_, _ = w.Write(raw)
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_vault_file",
+		Arguments: map[string]any{"filename": "Notes/bigjson.md", "format": "json"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	txt := res.Content[0].(*mcp.TextContent).Text
+	require.Contains(t, txt, "file too large")
+	require.Contains(t, txt, "startIndex=")
+	require.Less(t, len(txt), 50*1024)
+	structured := res.StructuredContent.(map[string]any)
+	pagination := structured["pagination"].(map[string]any)
+	require.Equal(t, true, pagination["hasMore"])
+}
+
+func TestMCPToolPatchVaultFileLargeBodyCapped(t *testing.T) {
+	large := strings.Repeat("P", 40*1024)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPatch, r.Method)
+		require.Equal(t, "append", r.Header.Get("Operation"))
+		require.Equal(t, "heading", r.Header.Get("Target-Type"))
+		_, _ = w.Write([]byte(large))
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "patch_vault_file",
+		Arguments: map[string]any{
+			"filename":   "Notes/patch.md",
+			"operation":  "append",
+			"targetType": "heading",
+			"target":     "Intro",
+			"content":    "more",
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Len(t, res.Content, 2)
+	require.Equal(t, "File patched successfully", res.Content[0].(*mcp.TextContent).Text)
+	body := res.Content[1].(*mcp.TextContent).Text
+	require.Contains(t, body, "file too large (40960 bytes)")
+	require.Contains(t, body, "startIndex=32768")
+	require.Less(t, len(body), 50*1024)
+}
+
+func TestMCPToolGetVaultFileSchemaIntegers(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(ts.Close)
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSession(t, cli)
+
+	var schema map[string]any
+	for tool, err := range cs.Tools(ctx, nil) {
+		require.NoError(t, err)
+		if tool.Name != "get_vault_file" {
+			continue
+		}
+		raw, err := json.Marshal(tool.InputSchema)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &schema))
+		break
+	}
+	require.NotEmpty(t, schema)
+	props, ok := schema["properties"].(map[string]any)
+	require.True(t, ok)
+	for _, name := range []string{"maxLength", "startIndex"} {
+		prop, ok := props[name].(map[string]any)
+		require.Truef(t, ok, "%s must be a schema object, got %T (%v)", name, props[name], props[name])
+		require.Truef(t, schemaPropAllowsInteger(prop), "%s must allow integer (not JSON Schema true), got %v", name, prop)
+	}
+	_, hasOffset := props["offset"]
+	require.False(t, hasOffset, "get_vault_file must not declare offset")
+}
+
+func schemaPropAllowsInteger(prop map[string]any) bool {
+	switch typ := prop["type"].(type) {
+	case string:
+		return typ == "integer"
+	case []any:
+		for _, alt := range typ {
+			if alt == "integer" {
+				return true
+			}
+		}
+	}
+	if anyOf, ok := prop["anyOf"].([]any); ok {
+		for _, alt := range anyOf {
+			m, _ := alt.(map[string]any)
+			if schemaPropAllowsInteger(m) {
+				return true
+			}
+		}
+	}
+	return false
 }
