@@ -10,7 +10,7 @@ A single-binary [Model Context Protocol](https://modelcontextprotocol.io/) serve
 
 ## What it gives you
 
-- **36 MCP tools** covering the full [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD, search, open, tags, commands, periodic notes), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Semantic Index mining tools (`si_*` over `/si/*`), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
+- **37–38 MCP tools** (capability-gated by Local REST API version; target **4.1.7**) covering the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD + `move_vault_file` on ≥4.1.0, search, open, tags, commands, periodic notes), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Semantic Index mining tools (`si_*` over `/si/*`), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
 - **Vault-backed prompts** — any note tagged `mcp-tools-prompt` in your prompts folder is exposed as an MCP prompt, executed through Templater on the Obsidian side. See [docs/prompts.md](docs/prompts.md).
 - **Two transports** — `stdio` (default) for editor integrations, `--transport=http` for shared local use.
 - **Single static binary** (~12 MB), no runtime dependencies, easy to ship.
@@ -24,7 +24,7 @@ Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrap
 | Component | Required for |
 |-----------|--------------|
 | [Obsidian](https://obsidian.md/) | All tools |
-| [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin | All tools |
+| [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin (**3.6.x–4.1.7**; target **4.1.7**) | All tools (catalog is capability-gated; 5.x unsupported) |
 | [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools) plugin | `execute_template`, vault prompts |
 | **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local`, `si_*` |
 | [Templater](https://github.com/SilentVoid13/Templater) | `execute_template` and dynamic prompts |
@@ -80,6 +80,7 @@ All knobs are environment variables (CLI flags override). Defaults work for a si
 | `OBSIDIAN_OMLX_CHECK` | `true` | Probe oMLX before `search_vault_local` (set `false` to skip) |
 | `OBSIDIAN_RETRIEVAL_DIR` | _(empty)_ | If set, append `search_vault_local` events to a per-host shard `<dir>/<hostname>.jsonl` (best-effort, never blocks search). Point inside the synced vault to feed offline scoring. Empty disables logging. |
 | `OBSIDIAN_RETRIEVAL_REGIME` | _(empty)_ | Opaque retriever/reranker version tag stamped on each logged retrieval event |
+| `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` | _(empty)_ | Override Local REST plugin semver for capability gating (skips `GET /` probe). Use in tests or when autodetection is wrong. |
 
 CLI:
 

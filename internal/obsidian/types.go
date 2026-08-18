@@ -17,12 +17,16 @@ type PatchParams struct {
 }
 
 // NoteJSON is application/vnd.olrapi.note+json for vault/active file reads.
+// On Local REST 4.x, links/backlinks come from the metadata cache when present.
+// unresolvedLinks is 5.x-only and intentionally omitted.
 type NoteJSON struct {
 	Content     string         `json:"content"`
 	Frontmatter map[string]any `json:"frontmatter"`
 	Path        string         `json:"path"`
 	Stat        NoteStat       `json:"stat"`
 	Tags        []string       `json:"tags"`
+	Links       []string       `json:"links,omitempty"`
+	Backlinks   []string       `json:"backlinks,omitempty"`
 }
 
 // NoteStat is filesystem metadata on a note JSON envelope.
@@ -33,12 +37,15 @@ type NoteStat struct {
 }
 
 // VaultFileJSON is the olrapi note+json shape returned for vault file reads (includes nested frontmatter.tags in plugin schema).
+// Links/backlinks appear on Local REST 4.x when the metadata cache provides them.
 type VaultFileJSON struct {
 	Frontmatter VaultFrontmatter `json:"frontmatter"`
 	Content     string           `json:"content"`
 	Path        string           `json:"path"`
 	Stat        NoteStat         `json:"stat"`
 	Tags        []string         `json:"tags"`
+	Links       []string         `json:"links,omitempty"`
+	Backlinks   []string         `json:"backlinks,omitempty"`
 }
 
 // VaultFrontmatter subset used by MCP prompts.

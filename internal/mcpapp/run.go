@@ -31,6 +31,7 @@ func NewMCPServer(log *slog.Logger, d tools.Deps) *mcp.Server {
 		HasPrompts:   true,
 		Instructions: "Obsidian MCP: Local REST API bridge, Local Smart Lookup semantic search (search_vault_local), and Templater routes from the obsidian-mcp-tools Obsidian plugin. See README for prerequisites.",
 	})
+	d = tools.ResolveCaps(d)
 	tools.RegisterAll(srv, d)
 	srv.AddReceivingMiddleware(prompts.DynamicVaultMiddleware(prompts.Deps{Client: d.Client, PromptsDir: pd}))
 	return srv

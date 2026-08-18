@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Local REST API **capability gating** (target plugin **4.1.7**): probe `GET /`
+  (`versions.self` → `manifest.version`) before `tools/list` registration; override
+  via `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` or `tools.Deps.RestAPIVersion`.
+  Fail-closed to a 3.6-safe catalog (no `move_vault_file`; never advertise 5.x-only
+  tools). Tool count: **37** on 3.6.x / unknown; **38** on ≥4.1.0.
+- `move_vault_file` MCP tool wrapping `MOVE /vault/{path}` (`Destination`,
+  `Allow-Overwrite`) when REST ≥4.1.0. Documents Obsidian `alwaysUpdateLinks`
+  modal risk (REST uses `renameFile`; no separate updateLinks header).
+- Typed NoteJson `links` / `backlinks` on `get_vault_file format=json` (4.x metadata
+  cache fields; not 5.x `unresolvedLinks`).
+- On REST ≥4.0, `search_vault` stays for JsonLogic but rejects `queryType=dataview`
+  with a clear MCP error (use `search_vault_local` for Dataview).
 - `get_vault_file` pagination via typed `maxLength` / `startIndex` (default
   maxLength **32768** bytes) so large notes stay under Cursor's ~50 KB inline
   spill; overflow notice + `structuredContent.pagination` (`totalLength`,
