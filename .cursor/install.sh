@@ -10,17 +10,24 @@ go mod download
 go build ./...
 
 # Pin golangci-lint to the version CI uses (.github/workflows/ci.yml) so
-# `golangci-lint run ./...` reproduces CI locally. Install into GOPATH/bin,
-# which is already on PATH. Skip re-install when the pinned version is present.
+# `golangci-lint run ./...` reproduces CI locally. Install into /usr/local/bin
+# (the canonical on-PATH tools dir the Cloud Agent image uses for gh et al.);
+# GOPATH/bin is not guaranteed to be on PATH in the built environment.
+# Skip re-install when the pinned version is already present.
 GOLANGCI_LINT_VERSION="v2.11.4"
-GOBIN="$(go env GOPATH)/bin"
-current=""
-if command -v golangci-lint >/dev/null 2>&1; then
-  current="v$(golangci-lint version 2>/dev/null | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')"
-fi
-if [ "$current" != "$GOLANGCI_LINT_VERSION" ]; then
+if ! golangci-lint version 2>/dev/null | grep -qE 'version 2\.11\.4'; then
+  tmpdir="$(mktemp -d)"
   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-    | sh -s -- -b "$GOBIN" "$GOLANGCI_LINT_VERSION"
+    | sh -s -- -b "$tmpdir" "$GOLANGCI_LINT_VERSION"
+  if [ -w /usr/local/bin ]; then
+    install -m 0755 "$tmpdir/golangci-lint" /usr/local/bin/golangci-lint
+  elif sudo -n true 2>/dev/null; then
+    sudo install -m 0755 "$tmpdir/golangci-lint" /usr/local/bin/golangci-lint
+  else
+    install -d "$(go env GOPATH)/bin"
+    install -m 0755 "$tmpdir/golangci-lint" "$(go env GOPATH)/bin/golangci-lint"
+  fi
+  rm -rf "$tmpdir"
 fi
 
 echo "obsidian-mcp environment ready: $(go version), $(golangci-lint version 2>/dev/null | head -1)"
