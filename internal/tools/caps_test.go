@@ -20,6 +20,12 @@ func TestResolveCapsFieldOverride(t *testing.T) {
 	d3 := ResolveCaps(Deps{RestAPIVersion: "3.6.1"})
 	require.False(t, d3.Caps.MoveVaultFile)
 	require.True(t, d3.Caps.RestDataviewDQL)
+
+	d5 := ResolveCaps(Deps{RestAPIVersion: "5.0.3"})
+	require.True(t, d5.Caps.MoveVaultFile)
+	require.False(t, d5.Caps.RestDataviewDQL)
+	require.False(t, d5.Caps.Periodic)
+	require.Equal(t, "5.0.3", d5.Caps.Version)
 }
 
 func TestResolveCapsNilClientFailClosed(t *testing.T) {

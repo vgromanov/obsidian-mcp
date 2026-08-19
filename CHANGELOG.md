@@ -7,13 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Local REST API **5.x** is no longer mapped to the 3.6-safe catalog. Major ≥5
+  uses the **4.1 ∩ 5.0.3** intersection: `move_vault_file` on, REST Dataview DQL
+  off, periodic tools off (5.x has no `/periodic/`). Tool count on 5.x: **33**.
+  Unknown / probe fail still fail-closed to 3.6-safe. Still never advertise
+  5.x-only surfaces (`vault_copy`, trash-delete, JSON PATCH, document-map,
+  plugin-native `/mcp/`).
+
 ### Added
 
-- Local REST API **capability gating** (target plugin **4.1.7**): probe `GET /`
-  (`versions.self` → `manifest.version`) before `tools/list` registration; override
-  via `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` or `tools.Deps.RestAPIVersion`.
-  Fail-closed to a 3.6-safe catalog (no `move_vault_file`; never advertise 5.x-only
-  tools). Tool count: **37** on 3.6.x / unknown; **38** on ≥4.1.0.
+- Local REST API **capability gating** (target plugin **4.1.7**; 5.x as 4.1 ∩
+  5.0.3): probe `GET /` (`versions.self` → `manifest.version`) before `tools/list`
+  registration; override via `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` or
+  `tools.Deps.RestAPIVersion`. Fail-closed to a 3.6-safe catalog on unknown /
+  probe fail (no `move_vault_file`; never advertise 5.x-only tools). Tool count:
+  **37** on 3.6.x / unknown; **38** on 4.1.x+; **33** on 5.x.
 - `move_vault_file` MCP tool wrapping `MOVE /vault/{path}` (`Destination`,
   `Allow-Overwrite`) when REST ≥4.1.0. Documents Obsidian `alwaysUpdateLinks`
   modal risk (REST uses `renameFile`; no separate updateLinks header).

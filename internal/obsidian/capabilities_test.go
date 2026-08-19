@@ -30,8 +30,9 @@ func TestCapsForVersion(t *testing.T) {
 		{"4.1.0", "4.1.0", true, false, true, true},
 		{"4.1.7", "4.1.7", true, false, true, true},
 		{"4.2.0", "4.2.0", true, false, true, true},
-		{"5.0.0", "5.0.0", false, true, true, true},
-		{"5.1.0", "5.1.0", false, true, true, true},
+		{"5.0.0", "5.0.0", true, false, false, true},
+		{"5.0.3", "5.0.3", true, false, false, true},
+		{"5.1.0", "5.1.0", true, false, false, true},
 		{"v4.1.7-beta", "v4.1.7-beta", true, false, true, true},
 	}
 	for _, tc := range cases {

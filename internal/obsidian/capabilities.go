@@ -21,8 +21,8 @@ type Caps struct {
 }
 
 // Safe36Caps is the fail-closed catalog: current 3.6-safe intersection (no MOVE,
-// Dataview DQL allowed, periodic present). Used for unknown versions, probe
-// failures, and unsupported 5.x (never advertise 5.x-only tools in this release).
+// Dataview DQL allowed, periodic present). Used for unknown versions and probe
+// failures only (never advertise 5.x-only tools).
 func Safe36Caps() Caps {
 	return Caps{
 		Version:         "",
@@ -33,7 +33,8 @@ func Safe36Caps() Caps {
 }
 
 // CapsForVersion maps a Local REST plugin semver to the capability matrix.
-// Unknown / empty / unparseable → Safe36Caps. Major ≥5 → Safe36Caps (fail-closed).
+// Unknown / empty / unparseable → Safe36Caps. Major ≥5 → 4.1 ∩ 5.x intersection
+// (MOVE on, REST Dataview DQL off, periodic off — 5.x has no /periodic/).
 func CapsForVersion(version string) Caps {
 	v := strings.TrimSpace(version)
 	if v == "" {
@@ -44,9 +45,13 @@ func CapsForVersion(version string) Caps {
 		return Safe36Caps()
 	}
 	if maj >= 5 {
-		c := Safe36Caps()
-		c.Version = v
-		return c
+		// 5.x (live 5.0.3): 4.1 ∩ 5.0.3 — MOVE still present; no /periodic/; no REST DQL.
+		return Caps{
+			Version:         v,
+			MoveVaultFile:   true,
+			RestDataviewDQL: false,
+			Periodic:        false,
+		}
 	}
 	c := Caps{
 		Version:         v,
