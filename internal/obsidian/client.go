@@ -309,6 +309,75 @@ func (c *Client) DeleteVaultFile(ctx context.Context, filename string) error {
 	return err
 }
 
+// EncodeVaultRelativeDestination percent-encodes each path segment of a vault-relative
+// Destination header value. Absolute paths (leading "/") are rejected (REST 400).
+// A trailing "/" is preserved (REST keeps the source filename under that directory).
+func EncodeVaultRelativeDestination(destination string) (string, error) {
+	dest := strings.TrimSpace(destination)
+	if dest == "" {
+		return "", fmt.Errorf("destination must not be empty")
+	}
+	if strings.HasPrefix(dest, "/") {
+		return "", fmt.Errorf("destination must be vault-relative (absolute paths starting with / are rejected)")
+	}
+	trailingSlash := strings.HasSuffix(dest, "/")
+	trimmed := strings.Trim(dest, "/")
+	if trimmed == "" {
+		// destination was only "/" or whitespace-slash — already rejected above for leading /
+		return "", fmt.Errorf("destination must not be empty")
+	}
+	parts := strings.Split(trimmed, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	out := strings.Join(parts, "/")
+	if trailingSlash {
+		out += "/"
+	}
+	return out, nil
+}
+
+// MoveVaultFile MOVE /vault/{filename} with Destination and Allow-Overwrite headers.
+// Expects 204 and returns the Content-Location header (new vault-relative path).
+// Local REST uses app.fileManager.renameFile (updates inbound links); there is no
+// separate updateLinks header — Obsidian may still show an "Update internal links?"
+// modal when alwaysUpdateLinks is off.
+func (c *Client) MoveVaultFile(ctx context.Context, filename, destination string, allowOverwrite bool) (contentLocation string, err error) {
+	dest, err := EncodeVaultRelativeDestination(destination)
+	if err != nil {
+		return "", err
+	}
+	fullPath := "/vault/" + url.PathEscape(filename)
+	full := strings.TrimRight(c.BaseURL.String(), "/") + fullPath
+
+	req, err := http.NewRequestWithContext(ctx, "MOVE", full, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Destination", dest)
+	if allowOverwrite {
+		req.Header.Set("Allow-Overwrite", "true")
+	} else {
+		req.Header.Set("Allow-Overwrite", "false")
+	}
+	req.Header.Set("User-Agent", defaultUserAgent)
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return "", fmt.Errorf("MOVE %s: %s", fullPath, summarizeErrorBody(b))
+	}
+	return resp.Header.Get("Content-Location"), nil
+}
+
 // SearchVaultLocal POST /local-smart-lookup/search/ (local-smart-lookup plugin extension route).
 func (c *Client) SearchVaultLocal(ctx context.Context, body any) (json.RawMessage, error) {
 	raw, err := json.Marshal(body)

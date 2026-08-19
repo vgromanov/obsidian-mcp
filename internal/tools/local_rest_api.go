@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -11,7 +13,9 @@ import (
 
 // RegisterLocalREST registers Local REST API bridge tools (parity with upstream local-rest-api).
 func RegisterLocalREST(s *mcp.Server, d Deps) {
+	d = ResolveCaps(d)
 	cli := d.Client
+	caps := d.Caps
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_server_info",
@@ -108,10 +112,18 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 		QueryType string `json:"queryType"`
 		Query     string `json:"query"`
 	}
+	searchDesc := "Search for documents matching a specified query using either Dataview DQL or JsonLogic."
+	if !caps.RestDataviewDQL {
+		searchDesc = "Search for documents matching a JsonLogic query (POST /search/). REST Dataview DQL was removed in Local REST API 4.0+; use search_vault_local dataviewQuery/dataviewSource for Dataview, or set queryType to jsonlogic."
+	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_vault",
-		Description: "Search for documents matching a specified query using either Dataview DQL or JsonLogic.",
+		Description: searchDesc,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchVaultIn) (*mcp.CallToolResult, any, error) {
+		qt := strings.ToLower(strings.TrimSpace(in.QueryType))
+		if !caps.RestDataviewDQL && qt == "dataview" {
+			return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
+		}
 		raw, err := cli.SearchVault(ctx, in.QueryType, in.Query)
 		if err != nil {
 			return nil, nil, err
@@ -162,7 +174,8 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 		Name: "get_vault_file",
 		Description: "Get the content of a file from your vault. Supports pagination through maxLength " +
 			"(default 32768 bytes) and startIndex so large notes stay under client inline limits. " +
-			"Omit format for markdown; format=json returns a note JSON envelope when the payload fits.",
+			"Omit format for markdown; format=json returns a note JSON envelope (content, frontmatter, path, " +
+			"stat, tags, and on Local REST 4.x links/backlinks from the metadata cache) when the payload fits.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getVaultIn) (*mcp.CallToolResult, any, error) {
 		asJSON := in.Format != nil && *in.Format == "json"
 		b, err := cli.GetVaultFile(ctx, in.Filename, asJSON)
@@ -242,4 +255,43 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 		}
 		return textResult("File deleted successfully"), nil, nil
 	})
+
+	if caps.MoveVaultFile {
+		type moveVaultIn struct {
+			Filename       string `json:"filename"`
+			Destination    string `json:"destination"`
+			UpdateLinks    *bool  `json:"updateLinks,omitempty"`
+			AllowOverwrite *bool  `json:"allowOverwrite,omitempty"`
+		}
+		mcp.AddTool(s, &mcp.Tool{
+			Name: "move_vault_file",
+			Description: "Move or rename a vault file via Local REST API MOVE /vault/{path} (requires plugin ≥4.1.0). " +
+				"destination is vault-relative; a trailing slash keeps the source filename under that directory. " +
+				"Absolute destinations starting with / are rejected. Defaults: updateLinks=true (REST uses " +
+				"app.fileManager.renameFile — no separate header; if Obsidian alwaysUpdateLinks is off, a UI modal may block), " +
+				"allowOverwrite=false.",
+		}, func(ctx context.Context, _ *mcp.CallToolRequest, in moveVaultIn) (*mcp.CallToolResult, any, error) {
+			allow := in.AllowOverwrite != nil && *in.AllowOverwrite
+			// updateLinks defaults true; REST has no header — renameFile always updates when Obsidian allows.
+			if in.UpdateLinks != nil && !*in.UpdateLinks {
+				return nil, nil, fmt.Errorf("updateLinks=false is not supported: Local REST MOVE always uses fileManager.renameFile (inbound link updates); set Obsidian alwaysUpdateLinks or accept the UI modal")
+			}
+			loc, err := cli.MoveVaultFile(ctx, in.Filename, in.Destination, allow)
+			if err != nil {
+				return nil, nil, err
+			}
+			msg := "File moved successfully"
+			if loc != "" {
+				msg = msg + " → " + loc
+			}
+			return textResult(msg), nil, nil
+		})
+	}
+}
+
+func capsVersionLabel(c obsidian.Caps) string {
+	if strings.TrimSpace(c.Version) != "" {
+		return c.Version
+	}
+	return "4.x+"
 }

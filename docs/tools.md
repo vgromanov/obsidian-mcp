@@ -11,14 +11,15 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `patch_active_file` | Local REST API | `PATCH /active/` |
 | `delete_active_file` | Local REST API | `DELETE /active/` |
 | `show_file_in_obsidian` | Local REST API | `POST /open/...` |
-| `search_vault` | Local REST API | `POST /search/` (Dataview / JsonLogic) |
+| `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL only on REST **&lt;4.0** (rejected with a clear error on 4.x+) |
 | `search_vault_simple` | Local REST API | `POST /search/simple/` |
 | `list_vault_files` | Local REST API | `GET /vault/` |
-| `get_vault_file` | Local REST API | `GET /vault/...` — paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown |
+| `get_vault_file` | Local REST API | `GET /vault/...` — paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
 | `create_vault_file` | Local REST API | `PUT /vault/...` |
 | `append_to_vault_file` | Local REST API | `POST /vault/...` |
 | `patch_vault_file` | Local REST API | `PATCH /vault/...` — response body capped with same `maxLength`/`startIndex` as `get_vault_file` |
 | `delete_vault_file` | Local REST API | `DELETE /vault/...` |
+| `move_vault_file` | Local REST API ≥4.1.0 | `MOVE /vault/...` — `Destination`, `Allow-Overwrite`; registered only when capability probe says ≥4.1.0 |
 | `list_tags` | Local REST API | `GET /tags/` |
 | `get_tag_files` | Local REST API | `POST /search/` JsonLogic (`{"in":[<tag>,{"var":"tags"}]}`) — upstream has no per-tag route |
 | `list_frontmatter_keys` | Local Smart Lookup | `GET /frontmatter_keys/` (Properties inventory; not under `/si/*`) |
@@ -42,7 +43,31 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** 36 tools (24 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch).
+**Count:** **37** tools on Local REST **3.6.x** (and fail-closed unknown/5.x); **38** on **≥4.1.0** (adds `move_vault_file`). Breakdown: 24–25 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch.
+
+### Capability matrix (Local REST API)
+
+At server build the process probes `GET /` (`versions.self`, then `manifest.version`) unless `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` (or `tools.Deps.RestAPIVersion`) overrides. Fail-closed → 3.6-safe catalog (no `move_vault_file`; never advertise 5.x-only tools).
+
+| Plugin version | `move_vault_file` | REST Dataview DQL on `search_vault` | Periodic tools | Notes |
+|----------------|-------------------|--------------------------------------|----------------|-------|
+| 3.6.x | no | yes | yes | Current Cursor baseline |
+| 4.0.x | no | no (JsonLogic only; clear error on `queryType=dataview`) | yes | |
+| 4.1.x+ (target **4.1.7**) | yes | no | yes | NoteJson `links`/`backlinks` |
+| 5.x / unknown / probe fail | no | yes (3.6-safe) | yes | 5.x unsupported; no `vault_copy` / trash-delete / JSON PATCH / document-map |
+
+### `move_vault_file`
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `filename` | string | Source vault-relative path |
+| `destination` | string | Vault-relative; trailing `/` keeps the source filename under that directory; absolute `/…` rejected |
+| `updateLinks` | bool | Default **true**. REST uses `app.fileManager.renameFile` (no separate header). If Obsidian **alwaysUpdateLinks** is off, a UI modal may block the MOVE. |
+| `allowOverwrite` | bool | Default **false** → `Allow-Overwrite: false` |
+
+### `search_vault` on 4.x
+
+`search_vault` stays advertised for **JsonLogic**. Do not use `queryType=dataview` on ≥4.0 — the tool returns a clear MCP error. For Dataview, use `search_vault_local` (`dataviewQuery` / `dataviewSource`). `search_vault_simple` is unchanged.
 
 ### `search_vault_local` arguments
 
@@ -65,7 +90,7 @@ Large notes can exceed Cursor's ~50 KB inline tool-result limit. Both tools slic
 | Argument | Type | Notes |
 |----------|------|-------|
 | `filename` | string | Vault-relative path (required) |
-| `format` | string | Optional; `json` returns the note JSON envelope when the payload fits in one page. Omit for markdown (preferred for agents). |
+| `format` | string | Optional; `json` returns the note JSON envelope when the payload fits in one page (`content`, `frontmatter`, `path`, `stat`, `tags`, and on Local REST 4.x `links` / `backlinks` from the metadata cache — not `unresolvedLinks`). Omit for markdown (preferred for agents). |
 | `maxLength` | integer | Max bytes per page. Default **32768** for vault reads (unlike `fetch`, which defaults to 5000). |
 | `startIndex` | integer | Byte index into the returned text for the next page (from the overflow notice / `pagination.endIndex`). |
 

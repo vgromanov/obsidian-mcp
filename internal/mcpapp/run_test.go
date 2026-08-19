@@ -19,9 +19,10 @@ import (
 
 func testDeps(cli *obsidian.Client) tools.Deps {
 	return tools.Deps{
-		Client:     cli,
-		PromptsDir: "Prompts",
-		OmlxCheck:  false,
+		Client:         cli,
+		PromptsDir:     "Prompts",
+		OmlxCheck:      false,
+		RestAPIVersion: "3.6.1", // skip live GET / probe in unit tests
 	}
 }
 

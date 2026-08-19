@@ -10,6 +10,7 @@ import (
 
 // RegisterPeriodic registers Local REST API periodic note tools (current period only).
 func RegisterPeriodic(s *mcp.Server, d Deps) {
+	d = ResolveCaps(d)
 	cli := d.Client
 
 	type periodFmtIn struct {
