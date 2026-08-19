@@ -284,12 +284,14 @@ func TestMCPToolPatchPeriodicNoteInvalidPeriod(t *testing.T) {
 
 func TestMCPToolPatchPeriodicNoteHeaders(t *testing.T) {
 	var op, tgtType, tgt string
+	var patchVer string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/periodic/daily/", r.URL.Path)
 		require.Equal(t, http.MethodPatch, r.Method)
 		op = r.Header.Get("Operation")
 		tgtType = r.Header.Get("Target-Type")
 		tgt = r.Header.Get("Target")
+		patchVer = r.Header.Get("Markdown-Patch-Version")
 		_, _ = w.Write([]byte(`patched`))
 	}))
 	t.Cleanup(ts.Close)
@@ -324,6 +326,7 @@ func TestMCPToolPatchPeriodicNoteHeaders(t *testing.T) {
 	require.Equal(t, "append", op)
 	require.Equal(t, "heading", tgtType)
 	require.Equal(t, "Log", tgt)
+	require.Equal(t, "1", patchVer)
 
 	txt := res.Content[0].(*mcp.TextContent).Text
 	require.Contains(t, txt, "patched successfully")
@@ -961,6 +964,7 @@ func TestMCPToolPatchVaultFileLargeBodyCapped(t *testing.T) {
 		require.Equal(t, http.MethodPatch, r.Method)
 		require.Equal(t, "append", r.Header.Get("Operation"))
 		require.Equal(t, "heading", r.Header.Get("Target-Type"))
+		require.Equal(t, "1", r.Header.Get("Markdown-Patch-Version"))
 		_, _ = w.Write([]byte(large))
 	}))
 	t.Cleanup(ts.Close)
