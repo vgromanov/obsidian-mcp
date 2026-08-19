@@ -8,7 +8,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `get_active_file` | Local REST API | `GET /active/` |
 | `update_active_file` | Local REST API | `PUT /active/` |
 | `append_to_active_file` | Local REST API | `POST /active/` |
-| `patch_active_file` | Local REST API | `PATCH /active/` |
+| `patch_active_file` | Local REST API | `PATCH /active/` — same `Markdown-Patch-Version: 1` as `patch_vault_file` |
 | `delete_active_file` | Local REST API | `DELETE /active/` |
 | `show_file_in_obsidian` | Local REST API | `POST /open/...` |
 | `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL only on REST **&lt;4.0** (rejected with a clear error on 4.x+) |
@@ -17,7 +17,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `get_vault_file` | Local REST API | `GET /vault/...` — nested paths use per-segment URL encoding (not `%2F`); paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
 | `create_vault_file` | Local REST API | `PUT /vault/...` — same segment encoding as get |
 | `append_to_vault_file` | Local REST API | `POST /vault/...` |
-| `patch_vault_file` | Local REST API | `PATCH /vault/...` — response body capped with same `maxLength`/`startIndex` as `get_vault_file` |
+| `patch_vault_file` | Local REST API | `PATCH /vault/...` — sends `Markdown-Patch-Version: 1` (required on REST **5.x** for header-driven PATCH); response body capped with same `maxLength`/`startIndex` as `get_vault_file` |
 | `delete_vault_file` | Local REST API | `DELETE /vault/...` |
 | `move_vault_file` | Local REST API ≥4.1.0 | `MOVE /vault/...` — source path segment-encoded; `Destination` / `Allow-Overwrite`; registered only when capability probe says ≥4.1.0 |
 | `list_tags` | Local REST API | `GET /tags/` |
@@ -29,7 +29,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `get_periodic_note` | Local REST API | `GET /periodic/{period}/` (current period only) |
 | `update_periodic_note` | Local REST API | `PUT /periodic/{period}/` |
 | `append_to_periodic_note` | Local REST API | `POST /periodic/{period}/` |
-| `patch_periodic_note` | Local REST API | `PATCH /periodic/{period}/` |
+| `patch_periodic_note` | Local REST API | `PATCH /periodic/{period}/` — same `Markdown-Patch-Version: 1` as `patch_vault_file` |
 | `delete_periodic_note` | Local REST API | `DELETE /periodic/{period}/` |
 | `search_vault_local` | Local Smart Lookup | `POST /local-smart-lookup/search/` (extension route; optional oMLX preflight) |
 | `si_health` | Local Smart Lookup SI | `GET /si/health/` |
@@ -54,7 +54,7 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 | 3.6.x | no | yes | yes | Current Cursor baseline |
 | 4.0.x | no | no (JsonLogic only; clear error on `queryType=dataview`) | yes | |
 | 4.1.x+ (target **4.1.7**) | yes | no | yes | NoteJson `links`/`backlinks` |
-| **5.x** (live **5.0.3**) | **yes** | **no** | **no** | 4.1 ∩ 5.0.3; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
+| **5.x** (live **5.0.3**) | **yes** | **no** | **no** | 4.1 ∩ 5.0.3; header PATCH sends `Markdown-Patch-Version: 1`; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
 | unknown / probe fail | no | yes (3.6-safe) | yes | Fail-closed; same as 3.6 |
 
 ### `move_vault_file`

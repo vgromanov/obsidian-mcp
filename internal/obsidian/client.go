@@ -557,6 +557,10 @@ func (c *Client) DeletePeriodicNote(ctx context.Context, period PeriodicPeriod) 
 
 func patchHeaders(p PatchParams) http.Header {
 	h := http.Header{}
+	// REST 5.x rejects header-driven PATCH (Operation / Target-Type / Target)
+	// unless this header opts back into the pre-2.x format. JSON PATCH is a
+	// 5.x-only surface we do not advertise. Older REST ignores the extra header.
+	h.Set("Markdown-Patch-Version", "1")
 	h.Set("Operation", p.Operation)
 	h.Set("Target-Type", p.TargetType)
 	h.Set("Target", p.Target)

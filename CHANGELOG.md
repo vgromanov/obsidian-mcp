@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `EncodeVaultRelativePath`) instead of `url.PathEscape` on the full relative
   path. Local REST API **5.x** returns 404 for `%2F` between folders
   (`/vault/Knowledge%2Fnote.md`); segment paths (`/vault/Knowledge/note.md`) work.
+- `patch_vault_file` / `patch_active_file` / `patch_periodic_note` send
+  `Markdown-Patch-Version: 1` so Local REST API **5.x** still accepts the
+  header-driven PATCH format (`Operation` / `Target-Type` / `Target`). Without
+  that header, 5.x returns 400 and frontmatter patches (author, description)
+  silently fail. JSON PATCH remains a 5.x-only surface we do not advertise.
 
 ### Changed
 
