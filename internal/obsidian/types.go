@@ -6,6 +6,8 @@ import (
 )
 
 // PatchParams mirrors Local REST API PATCH headers + body (see upstream ApiPatchParameters).
+// The client always sends Markdown-Patch-Version: 1 so REST 5.x still accepts this
+// header-driven format (without it, 5.x returns 400).
 type PatchParams struct {
 	Operation            string  `json:"operation"`
 	TargetType           string  `json:"targetType"`
