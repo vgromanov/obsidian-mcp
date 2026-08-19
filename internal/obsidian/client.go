@@ -266,7 +266,7 @@ func (c *Client) GetVaultFile(ctx context.Context, filename string, asJSON bool)
 	} else {
 		h.Set("Accept", mimeMarkdown)
 	}
-	path := "/vault/" + url.PathEscape(filename)
+	path := "/vault/" + EncodeVaultRelativePath(filename)
 	opt := RequestOptions{Method: http.MethodGet, Path: path, Headers: h}
 	_, b, err := c.Do(ctx, opt)
 	return b, err
@@ -276,7 +276,7 @@ func (c *Client) GetVaultFile(ctx context.Context, filename string, asJSON bool)
 func (c *Client) CreateVaultFile(ctx context.Context, filename, content string) error {
 	h := http.Header{}
 	h.Set("Content-Type", mimeMarkdown)
-	path := "/vault/" + url.PathEscape(filename)
+	path := "/vault/" + EncodeVaultRelativePath(filename)
 	opt := RequestOptions{Method: http.MethodPut, Path: path, BodyString: content, Headers: h, Expect204: true}
 	_, _, err := c.Do(ctx, opt)
 	return err
@@ -286,7 +286,7 @@ func (c *Client) CreateVaultFile(ctx context.Context, filename, content string) 
 func (c *Client) AppendVaultFile(ctx context.Context, filename, content string) error {
 	h := http.Header{}
 	h.Set("Content-Type", mimeMarkdown)
-	path := "/vault/" + url.PathEscape(filename)
+	path := "/vault/" + EncodeVaultRelativePath(filename)
 	opt := RequestOptions{Method: http.MethodPost, Path: path, BodyString: content, Headers: h, Expect204: true}
 	_, _, err := c.Do(ctx, opt)
 	return err
@@ -295,7 +295,7 @@ func (c *Client) AppendVaultFile(ctx context.Context, filename, content string) 
 // PatchVaultFile PATCH /vault/{filename}
 func (c *Client) PatchVaultFile(ctx context.Context, filename string, p PatchParams) (string, error) {
 	h := patchHeaders(p)
-	path := "/vault/" + url.PathEscape(filename)
+	path := "/vault/" + EncodeVaultRelativePath(filename)
 	opt := RequestOptions{Method: http.MethodPatch, Path: path, BodyString: p.Content, Headers: h}
 	_, b, err := c.Do(ctx, opt)
 	return string(b), err
@@ -303,10 +303,25 @@ func (c *Client) PatchVaultFile(ctx context.Context, filename string, p PatchPar
 
 // DeleteVaultFile DELETE /vault/{filename}
 func (c *Client) DeleteVaultFile(ctx context.Context, filename string) error {
-	path := "/vault/" + url.PathEscape(filename)
+	path := "/vault/" + EncodeVaultRelativePath(filename)
 	opt := RequestOptions{Method: http.MethodDelete, Path: path, Expect204: true}
 	_, _, err := c.Do(ctx, opt)
 	return err
+}
+
+// EncodeVaultRelativePath percent-encodes each segment of a vault-relative path for
+// /vault/{path} request URLs. Slashes between segments stay as "/" (not %2F) because
+// Local REST API 5.x treats a literal %2F as a single path segment and returns 404.
+func EncodeVaultRelativePath(filename string) string {
+	trimmed := strings.Trim(strings.TrimSpace(filename), "/")
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
 }
 
 // EncodeVaultRelativeDestination percent-encodes each path segment of a vault-relative
@@ -326,11 +341,7 @@ func EncodeVaultRelativeDestination(destination string) (string, error) {
 		// destination was only "/" or whitespace-slash — already rejected above for leading /
 		return "", fmt.Errorf("destination must not be empty")
 	}
-	parts := strings.Split(trimmed, "/")
-	for i, p := range parts {
-		parts[i] = url.PathEscape(p)
-	}
-	out := strings.Join(parts, "/")
+	out := EncodeVaultRelativePath(trimmed)
 	if trailingSlash {
 		out += "/"
 	}
@@ -347,7 +358,7 @@ func (c *Client) MoveVaultFile(ctx context.Context, filename, destination string
 	if err != nil {
 		return "", err
 	}
-	fullPath := "/vault/" + url.PathEscape(filename)
+	fullPath := "/vault/" + EncodeVaultRelativePath(filename)
 	full := strings.TrimRight(c.BaseURL.String(), "/") + fullPath
 
 	req, err := http.NewRequestWithContext(ctx, "MOVE", full, nil)

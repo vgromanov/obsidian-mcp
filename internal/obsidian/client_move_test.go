@@ -11,6 +11,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEncodeVaultRelativePath(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"Knowledge/DECISION.md", "Knowledge/DECISION.md"},
+		{"/Knowledge/DECISION.md", "Knowledge/DECISION.md"},
+		{"Knowledge/DECISION.md/", "Knowledge/DECISION.md"},
+		{"note.md", "note.md"},
+		{"a/b/c.md", "a/b/c.md"},
+		{"dir/résumé.md", "dir/r%C3%A9sum%C3%A9.md"},
+		{"", ""},
+		{"  ", ""},
+		{"/", ""},
+	}
+	for _, tc := range cases {
+		got := EncodeVaultRelativePath(tc.in)
+		require.Equal(t, tc.want, got, tc.in)
+		require.NotContains(t, got, "%2F", tc.in)
+		require.NotContains(t, got, "%2f", tc.in)
+	}
+}
+
 func TestEncodeVaultRelativeDestination(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -21,6 +45,7 @@ func TestEncodeVaultRelativeDestination(t *testing.T) {
 		{"archive/todo.md", "archive/todo.md", false},
 		{"archive/", "archive/", false},
 		{"résumé.md", "r%C3%A9sum%C3%A9.md", false},
+		{"dir/résumé.md", "dir/r%C3%A9sum%C3%A9.md", false},
 		{"/abs.md", "", true},
 		{"", "", true},
 		{"  ", "", true},
@@ -33,18 +58,20 @@ func TestEncodeVaultRelativeDestination(t *testing.T) {
 		}
 		require.NoError(t, err, tc.in)
 		require.Equal(t, tc.want, got)
+		require.NotContains(t, got, "%2F", tc.in)
 	}
 }
 
 func TestMoveVaultFileHeaders(t *testing.T) {
 	t.Parallel()
-	var gotMethod, gotPath, gotDest, gotOverwrite string
+	var gotMethod, gotEscapedPath, gotDest, gotOverwrite string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
-		gotPath = r.URL.Path
+		gotEscapedPath = r.URL.EscapedPath()
 		gotDest = r.Header.Get("Destination")
 		gotOverwrite = r.Header.Get("Allow-Overwrite")
 		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+		require.NotContains(t, gotEscapedPath, "%2F")
 		_, _ = io.Copy(io.Discard, r.Body)
 		w.Header().Set("Content-Location", "archive/todo.md")
 		w.WriteHeader(http.StatusNoContent)
@@ -59,7 +86,7 @@ func TestMoveVaultFileHeaders(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "archive/todo.md", loc)
 	require.Equal(t, "MOVE", gotMethod)
-	require.Equal(t, "/vault/notes/todo.md", gotPath)
+	require.Equal(t, "/vault/notes/todo.md", gotEscapedPath)
 	require.Equal(t, "archive/", gotDest)
 	require.Equal(t, "false", gotOverwrite)
 }

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Vault CRUD / MOVE request paths encode **per path segment** (reuse
+  `EncodeVaultRelativePath`) instead of `url.PathEscape` on the full relative
+  path. Local REST API **5.x** returns 404 for `%2F` between folders
+  (`/vault/Knowledge%2Fnote.md`); segment paths (`/vault/Knowledge/note.md`) work.
+
 ### Changed
 
 - Local REST API **5.x** is no longer mapped to the 3.6-safe catalog. Major ≥5

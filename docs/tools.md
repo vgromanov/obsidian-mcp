@@ -14,12 +14,12 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL only on REST **&lt;4.0** (rejected with a clear error on 4.x+) |
 | `search_vault_simple` | Local REST API | `POST /search/simple/` |
 | `list_vault_files` | Local REST API | `GET /vault/` |
-| `get_vault_file` | Local REST API | `GET /vault/...` — paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
-| `create_vault_file` | Local REST API | `PUT /vault/...` |
+| `get_vault_file` | Local REST API | `GET /vault/...` — nested paths use per-segment URL encoding (not `%2F`); paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
+| `create_vault_file` | Local REST API | `PUT /vault/...` — same segment encoding as get |
 | `append_to_vault_file` | Local REST API | `POST /vault/...` |
 | `patch_vault_file` | Local REST API | `PATCH /vault/...` — response body capped with same `maxLength`/`startIndex` as `get_vault_file` |
 | `delete_vault_file` | Local REST API | `DELETE /vault/...` |
-| `move_vault_file` | Local REST API ≥4.1.0 | `MOVE /vault/...` — `Destination`, `Allow-Overwrite`; registered only when capability probe says ≥4.1.0 |
+| `move_vault_file` | Local REST API ≥4.1.0 | `MOVE /vault/...` — source path segment-encoded; `Destination` / `Allow-Overwrite`; registered only when capability probe says ≥4.1.0 |
 | `list_tags` | Local REST API | `GET /tags/` |
 | `get_tag_files` | Local REST API | `POST /search/` JsonLogic (`{"in":[<tag>,{"var":"tags"}]}`) — upstream has no per-tag route |
 | `list_frontmatter_keys` | Local Smart Lookup | `GET /frontmatter_keys/` (Properties inventory; not under `/si/*`) |
