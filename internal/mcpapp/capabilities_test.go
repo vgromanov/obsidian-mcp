@@ -69,7 +69,8 @@ func TestCapabilityMatrixToolCatalog(t *testing.T) {
 		{"4.1.7", true, true, false, true},
 		{"", false, true, true, true}, // unknown override empty → probe; use explicit unknown via garbage
 		{"unknown", false, true, true, true},
-		{"5.0.0", false, true, true, true},
+		{"5.0.0", true, false, false, true},
+		{"5.0.3", true, false, false, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.version, func(t *testing.T) {
@@ -81,6 +82,18 @@ func TestCapabilityMatrixToolCatalog(t *testing.T) {
 			names := toolNames(t, ctx, cs)
 			require.Equal(t, tc.wantMove, hasTool(names, "move_vault_file"), names)
 			require.Equal(t, tc.wantPeriodic, hasTool(names, "get_periodic_note"), names)
+			if !tc.wantPeriodic {
+				for _, p := range []string{
+					"get_periodic_note", "update_periodic_note", "append_to_periodic_note",
+					"patch_periodic_note", "delete_periodic_note",
+				} {
+					require.False(t, hasTool(names, p), p)
+				}
+			}
+			// 5.x = 4.1 catalog minus five *_periodic_note tools → 33.
+			if strings.HasPrefix(ver, "5.") {
+				require.Len(t, names, 33, names)
+			}
 			require.True(t, hasTool(names, "search_vault"), names)
 			require.True(t, hasTool(names, "search_vault_simple"), names)
 			require.True(t, hasTool(names, "search_vault_local"), names)
@@ -157,6 +170,23 @@ func TestHiddenMoveVaultFileCallErrors(t *testing.T) {
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "404")
 	require.NotContains(t, err.Error(), "405")
+}
+
+func TestHiddenPeriodicNoteCallErrorsOn5x(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected HTTP %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(ts.Close)
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+	ctx, cs := mcpSessionWithVersion(t, cli, "5.0.3")
+
+	_, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "get_periodic_note",
+		Arguments: map[string]any{"period": "daily"},
+	})
+	require.Error(t, err)
 }
 
 func TestSearchVaultRejectsDataviewOn4x(t *testing.T) {

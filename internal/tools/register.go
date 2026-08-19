@@ -6,7 +6,9 @@ import (
 
 // RegisterAll registers Obsidian MCP tools gated by Local REST capabilities.
 // Base catalog is 37 tools (3.6-safe). On REST ≥4.1.0, move_vault_file is also
-// registered (38 tools). Probe/override runs via ResolveCaps before registration.
+// registered (38 tools). On REST ≥5.0, periodic tools are omitted (33 tools:
+// 4.1 catalog minus five *_periodic_note). Probe/override runs via ResolveCaps
+// before registration.
 func RegisterAll(s *mcp.Server, d Deps) {
 	d = ResolveCaps(d)
 	RegisterLocalREST(s, d)

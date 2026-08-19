@@ -43,7 +43,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** **37** tools on Local REST **3.6.x** (and fail-closed unknown/5.x); **38** on **≥4.1.0** (adds `move_vault_file`). Breakdown: 24–25 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch.
+**Count:** **37** tools on Local REST **3.6.x** / unknown / probe fail; **38** on **4.1.x+** (adds `move_vault_file`); **33** on **5.x** (4.1 catalog minus five `*_periodic_note` — 5.x has no `/periodic/`). Breakdown: 24–25 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch (minus periodic on 5.x).
 
 ### Capability matrix (Local REST API)
 
@@ -54,7 +54,8 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 | 3.6.x | no | yes | yes | Current Cursor baseline |
 | 4.0.x | no | no (JsonLogic only; clear error on `queryType=dataview`) | yes | |
 | 4.1.x+ (target **4.1.7**) | yes | no | yes | NoteJson `links`/`backlinks` |
-| 5.x / unknown / probe fail | no | yes (3.6-safe) | yes | 5.x unsupported; no `vault_copy` / trash-delete / JSON PATCH / document-map |
+| **5.x** (live **5.0.3**) | **yes** | **no** | **no** | 4.1 ∩ 5.0.3; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
+| unknown / probe fail | no | yes (3.6-safe) | yes | Fail-closed; same as 3.6 |
 
 ### `move_vault_file`
 
