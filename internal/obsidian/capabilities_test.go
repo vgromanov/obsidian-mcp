@@ -102,4 +102,51 @@ func TestProbeCapsParsesVersionsSelf(t *testing.T) {
 	require.Equal(t, "4.1.7", c.Version)
 	require.True(t, c.MoveVaultFile)
 	require.False(t, c.RestDataviewDQL)
+	require.False(t, c.PluginDataviewQuery)
+}
+
+func TestPluginDataviewQueryFromServerInfo(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"object route", `{"apiExtensions":[{"id":"local-smart-lookup","routes":[{"path":"/dataview/query/","authenticated":true}]}]}`, true},
+		{"no slash", `{"apiExtensions":[{"routes":[{"path":"/dataview/query"}]}]}`, true},
+		{"string route", `{"apiExtensions":[{"routes":["/dataview/query/"]}]}`, true},
+		{"other route", `{"apiExtensions":[{"routes":[{"path":"/si/health/"}]}]}`, false},
+		{"missing", `{"versions":{"self":"4.1.7"}}`, false},
+		{"garbage", `not-json`, false},
+		{"empty extensions", `{"apiExtensions":[]}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, PluginDataviewQueryFromServerInfo([]byte(tc.body)))
+		})
+	}
+}
+
+func TestProbeCapsSetsPluginDataviewQuery(t *testing.T) {
+	t.Parallel()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/", r.URL.Path)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"versions": map[string]string{"self": "4.1.7"},
+			"apiExtensions": []any{
+				map[string]any{
+					"routes": []any{map[string]any{"path": "/dataview/query/"}},
+				},
+			},
+		})
+	}))
+	t.Cleanup(ts.Close)
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := NewClientFromURL(u, "secret", ts.Client())
+	c := ProbeCaps(context.Background(), cli)
+	require.Equal(t, "4.1.7", c.Version)
+	require.False(t, c.RestDataviewDQL)
+	require.True(t, c.PluginDataviewQuery)
 }
