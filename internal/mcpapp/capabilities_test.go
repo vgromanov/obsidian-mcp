@@ -208,7 +208,9 @@ func TestSearchVaultRejectsDataviewOn4x(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "queryType=dataview")
+	text := res.Content[0].(*mcp.TextContent).Text
+	require.Contains(t, text, "queryType=dataview")
+	require.Contains(t, text, "POST /dataview/query/")
 }
 
 func TestGetVaultFileJSONLinksBacklinks(t *testing.T) {

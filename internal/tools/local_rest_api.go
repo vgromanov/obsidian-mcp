@@ -111,18 +111,24 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 	type searchVaultIn struct {
 		QueryType string `json:"queryType"`
 		Query     string `json:"query"`
-	}
-	searchDesc := "Search for documents matching a specified query using either Dataview DQL or JsonLogic."
-	if !caps.RestDataviewDQL {
-		searchDesc = "Search for documents matching a JsonLogic query (POST /search/). REST Dataview DQL was removed in Local REST API 4.0+; use search_vault_local dataviewQuery/dataviewSource for Dataview, or set queryType to jsonlogic."
+		// Limit is forwarded only to POST /dataview/query/. REST <4.0 DQL and
+		// JsonLogic ignore it.
+		Limit *int `json:"limit,omitempty"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_vault",
-		Description: searchDesc,
+		Description: searchVaultDescription(caps),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchVaultIn) (*mcp.CallToolResult, any, error) {
 		qt := strings.ToLower(strings.TrimSpace(in.QueryType))
-		if !caps.RestDataviewDQL && qt == "dataview" {
-			return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
+		if qt == "dataview" && !caps.RestDataviewDQL {
+			if !caps.PluginDataviewQuery {
+				return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); install Local Smart Lookup so POST /dataview/query/ is available, or use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
+			}
+			raw, err := cli.QueryDataview(ctx, in.Query, in.Limit)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonResult(raw), nil, nil
 		}
 		raw, err := cli.SearchVault(ctx, in.QueryType, in.Query)
 		if err != nil {
@@ -294,4 +300,19 @@ func capsVersionLabel(c obsidian.Caps) string {
 		return c.Version
 	}
 	return "4.x+"
+}
+
+// searchVaultDQLExamples are two short generic-vault queries. Keep vault
+// names generic; do not mention a specific deployment.
+const searchVaultDQLExamples = ` Examples: TABLE status FROM "Projects" WHERE status = "active"; LIST FROM #research.`
+
+func searchVaultDescription(caps obsidian.Caps) string {
+	switch {
+	case caps.RestDataviewDQL:
+		return "Search for documents matching a specified query using either Dataview DQL or JsonLogic." + searchVaultDQLExamples
+	case caps.PluginDataviewQuery:
+		return "Search for documents matching JsonLogic (POST /search/) or Dataview DQL (POST /dataview/query/, body {query, limit})." + searchVaultDQLExamples
+	default:
+		return "Search for documents matching a JsonLogic query (POST /search/). REST Dataview DQL was removed in Local REST API 4.0+; install Local Smart Lookup so POST /dataview/query/ is available, or use search_vault_local dataviewQuery/dataviewSource for Dataview path filters, or set queryType to jsonlogic."
+	}
 }

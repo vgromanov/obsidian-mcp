@@ -37,3 +37,22 @@ func TestCapsVersionLabel(t *testing.T) {
 	require.Equal(t, "4.1.7", capsVersionLabel(obsidian.Caps{Version: "4.1.7"}))
 	require.Equal(t, "4.x+", capsVersionLabel(obsidian.Caps{}))
 }
+
+func TestSearchVaultDescription(t *testing.T) {
+	rest := searchVaultDescription(obsidian.Caps{RestDataviewDQL: true})
+	require.Contains(t, rest, "Dataview DQL")
+	require.Contains(t, rest, `TABLE status FROM "Projects" WHERE status = "active"`)
+	require.Contains(t, rest, "LIST FROM #research")
+	require.NotContains(t, rest, "removed in Local REST API 4.0")
+
+	plugin := searchVaultDescription(obsidian.Caps{PluginDataviewQuery: true})
+	require.Contains(t, plugin, "POST /dataview/query/")
+	require.Contains(t, plugin, `TABLE status FROM "Projects"`)
+	require.Contains(t, plugin, "LIST FROM #research")
+	require.NotContains(t, plugin, "removed in Local REST API 4.0")
+
+	none := searchVaultDescription(obsidian.Caps{})
+	require.Contains(t, none, "JsonLogic")
+	require.Contains(t, none, "removed in Local REST API 4.0")
+	require.Contains(t, none, "POST /dataview/query/")
+}

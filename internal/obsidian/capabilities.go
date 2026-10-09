@@ -16,6 +16,9 @@ type Caps struct {
 	MoveVaultFile bool
 	// RestDataviewDQL is true when POST /search/ accepts Dataview DQL (REST <4.0).
 	RestDataviewDQL bool
+	// PluginDataviewQuery is true when GET / advertises Local Smart Lookup
+	// POST /dataview/query/ (independent of the Local REST semver).
+	PluginDataviewQuery bool
 	// Periodic is true when /periodic/ routes are advertised (hidden only when known gone).
 	Periodic bool
 }
@@ -104,8 +107,9 @@ func ParseServerInfoVersion(raw []byte) (string, error) {
 	return "", fmt.Errorf("GET /: no versions.self or manifest.version")
 }
 
-// ProbeCaps calls GET / and returns CapsForVersion. On any failure returns Safe36Caps.
-// Nil client is safe and returns Safe36Caps without panicking.
+// ProbeCaps calls GET / and returns CapsForVersion, plus PluginDataviewQuery
+// when that body advertises POST /dataview/query/. On any failure returns
+// Safe36Caps. Nil client is safe and returns Safe36Caps without panicking.
 func ProbeCaps(ctx context.Context, c *Client) Caps {
 	if c == nil {
 		return Safe36Caps()
@@ -115,10 +119,54 @@ func ProbeCaps(ctx context.Context, c *Client) Caps {
 		return Safe36Caps()
 	}
 	ver, err := ParseServerInfoVersion(raw)
-	if err != nil {
-		return Safe36Caps()
+	caps := Safe36Caps()
+	if err == nil {
+		caps = CapsForVersion(ver)
 	}
-	return CapsForVersion(ver)
+	caps.PluginDataviewQuery = PluginDataviewQueryFromServerInfo(raw)
+	return caps
+}
+
+// PluginDataviewQueryFromServerInfo reports whether GET / lists a Local Smart
+// Lookup route at /dataview/query/. Routes may be objects ({"path":"..."}) or
+// bare path strings. Missing or unparseable extensions are false.
+func PluginDataviewQueryFromServerInfo(raw []byte) bool {
+	var root struct {
+		APIExtensions []struct {
+			Routes []json.RawMessage `json:"routes"`
+		} `json:"apiExtensions"`
+	}
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return false
+	}
+	for _, ext := range root.APIExtensions {
+		for _, route := range ext.Routes {
+			if routeAdvertisesDataviewQuery(route) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func routeAdvertisesDataviewQuery(raw json.RawMessage) bool {
+	var asObj struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(raw, &asObj); err == nil && isDataviewQueryRoute(asObj.Path) {
+		return true
+	}
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil && isDataviewQueryRoute(asString) {
+		return true
+	}
+	return false
+}
+
+func isDataviewQueryRoute(path string) bool {
+	path = strings.TrimSpace(path)
+	path = strings.TrimRight(path, "/")
+	return path == "/dataview/query"
 }
 
 // parseSemver parses a leading major.minor.patch (optional pre-release suffix).

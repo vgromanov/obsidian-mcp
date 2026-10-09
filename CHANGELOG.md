@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `search_vault` `queryType=dataview` calls Local Smart Lookup `POST /dataview/query/`
+  (`{query, limit}`) when Local REST is **≥4.0** and `GET /` advertises that route.
+  REST **&lt;4.0** still uses `POST /search/` with the Dataview DQL content type
+  (`limit` is not sent). Optional `limit` is forwarded only on the plugin route.
+  Plugin HTTP 400 messages are returned as the tool error. When the route is
+  absent on ≥4.0, the error names `POST /dataview/query/`.
 - Local REST API **capability gating** (target plugin **4.1.7**; 5.x as 4.1 ∩
   5.0.3): probe `GET /` (`versions.self` → `manifest.version`) before `tools/list`
   registration; override via `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` or

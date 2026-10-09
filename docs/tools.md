@@ -11,7 +11,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `patch_active_file` | Local REST API | `PATCH /active/` |
 | `delete_active_file` | Local REST API | `DELETE /active/` |
 | `show_file_in_obsidian` | Local REST API | `POST /open/...` |
-| `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL only on REST **&lt;4.0** (rejected with a clear error on 4.x+) |
+| `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL on REST **&lt;4.0**. On REST **≥4.0**, DQL is `POST /dataview/query/` when `GET /` advertises that route (`{query, limit}`); otherwise a clear error |
 | `search_vault_simple` | Local REST API | `POST /search/simple/` |
 | `list_vault_files` | Local REST API | `GET /vault/` |
 | `get_vault_file` | Local REST API | `GET /vault/...` — nested paths use per-segment URL encoding (not `%2F`); paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
@@ -49,13 +49,15 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 
 At server build the process probes `GET /` (`versions.self`, then `manifest.version`) unless `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` (or `tools.Deps.RestAPIVersion`) overrides. Fail-closed → 3.6-safe catalog (no `move_vault_file`; never advertise 5.x-only tools).
 
-| Plugin version | `move_vault_file` | REST Dataview DQL on `search_vault` | Periodic tools | Notes |
-|----------------|-------------------|--------------------------------------|----------------|-------|
-| 3.6.x | no | yes | yes | Current Cursor baseline |
-| 4.0.x | no | no (JsonLogic only; clear error on `queryType=dataview`) | yes | |
-| 4.1.x+ (target **4.1.7**) | yes | no | yes | NoteJson `links`/`backlinks` |
-| **5.x** (live **5.0.3**) | **yes** | **no** | **no** | 4.1 ∩ 5.0.3; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
-| unknown / probe fail | no | yes (3.6-safe) | yes | Fail-closed; same as 3.6 |
+| Plugin version | `move_vault_file` | REST Dataview DQL on `search_vault` | Plugin `POST /dataview/query/` | Periodic tools | Notes |
+|----------------|-------------------|--------------------------------------|-------------------------------|----------------|-------|
+| 3.6.x | no | yes (`POST /search/`) | ignored while REST DQL is on | yes | Current Cursor baseline |
+| 4.0.x | no | no | yes, when `GET /` lists the route | yes | otherwise clear error naming the plugin route |
+| 4.1.x+ (target **4.1.7**) | yes | no | yes, when advertised | yes | NoteJson `links`/`backlinks` |
+| **5.x** (live **5.0.3**) | **yes** | **no** | yes, when advertised | **no** | 4.1 ∩ 5.0.3; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
+| unknown / probe fail | no | yes (3.6-safe) | no (probe failed) | yes | Fail-closed; same as 3.6 |
+
+`PluginDataviewQuery` is not a Local REST semver flag. `ProbeCaps` sets it when authenticated `GET /` `apiExtensions[].routes` includes `/dataview/query/`. `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` still skip that probe, so the flag stays false under the override.
 
 ### `move_vault_file`
 
@@ -68,7 +70,19 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 
 ### `search_vault` on 4.x
 
-`search_vault` stays advertised for **JsonLogic**. Do not use `queryType=dataview` on ≥4.0 — the tool returns a clear MCP error. For Dataview, use `search_vault_local` (`dataviewQuery` / `dataviewSource`). `search_vault_simple` is unchanged.
+`search_vault` stays advertised for **JsonLogic** (`POST /search/`).
+
+`queryType=dataview`:
+
+| Condition | Call |
+|-----------|------|
+| Local REST **&lt;4.0** | unchanged `POST /search/` with `Content-Type: application/vnd.olrapi.dataview.dql+txt`. `limit` is not sent. |
+| Local REST **≥4.0** and `GET /` advertises `POST /dataview/query/` | `POST /dataview/query/` JSON `{ "query", "limit"? }`. `limit` is omitted when unset. HTTP 400 text is the tool error. |
+| Local REST **≥4.0** and the route is absent | clear MCP error naming `POST /dataview/query/` as the fix. JsonLogic and `search_vault_local` (`dataviewQuery` / `dataviewSource`, a path filter, not a DQL table) still work. |
+
+When DQL is available the tool description includes two examples: `TABLE status FROM "Projects" WHERE status = "active"` and `LIST FROM #research`.
+
+`search_vault_simple` is unchanged.
 
 ### `search_vault_local` arguments
 
