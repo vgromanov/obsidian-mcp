@@ -14,7 +14,9 @@
 *.swo
 .idea/
 .vscode/
-.cursor/
+.cursor/*
+!.cursor/environment.json
+!.cursor/install.sh
 
 # Local config / secrets
 .env
