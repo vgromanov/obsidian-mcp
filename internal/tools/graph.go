@@ -45,6 +45,7 @@ const graphTraverseDescription = "Read-only link-graph closure over a vault fold
 	"edges[].source is a frontmatter field, or $body for wikilinks in the note body. " +
 	"A $body edge includes section, the heading the link sits under (null above the first heading). " +
 	"Optional sections keeps only those headings. Optional embeds includes embedded notes. " +
+	"cycle_sources selects which edge sources form cycles. Omit it and the route leaves $body out of that computation; list \"$body\" to include mention edges. Each cycle reports those sources. " +
 	"direction is out, in, or both. Omit it and the route uses out. max_depth omitted or null walks until the node cap. " +
 	"include projects frontmatter fields onto each node; $body in include returns the raw note body. " +
 	"Omitting start exports every node and edge in scope. include [\"$body\"] on a whole-scope export is large. " +
@@ -82,14 +83,15 @@ type graphEdgeIn struct {
 }
 
 type graphTraverseIn struct {
-	Scope      string        `json:"scope"`
-	IDField    *string       `json:"id_field,omitempty"`
-	Edges      []graphEdgeIn `json:"edges"`
-	Start      *[]string     `json:"start,omitempty"`
-	Direction  *string       `json:"direction,omitempty"`
-	MaxDepth   *int          `json:"max_depth,omitempty"`
-	Include    []string      `json:"include,omitempty"`
-	LimitNodes *int          `json:"limit_nodes,omitempty"`
+	Scope        string        `json:"scope"`
+	IDField      *string       `json:"id_field,omitempty"`
+	Edges        []graphEdgeIn `json:"edges"`
+	CycleSources *[]string     `json:"cycle_sources,omitempty"`
+	Start        *[]string     `json:"start,omitempty"`
+	Direction    *string       `json:"direction,omitempty"`
+	MaxDepth     *int          `json:"max_depth,omitempty"`
+	Include      []string      `json:"include,omitempty"`
+	LimitNodes   *int          `json:"limit_nodes,omitempty"`
 }
 
 func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.GraphTraverseRequest, error) {
@@ -118,6 +120,17 @@ func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.Grap
 			Sections: edge.Sections,
 			Embeds:   edge.Embeds,
 		}
+	}
+	var cycleSources *[]string
+	if in.CycleSources != nil {
+		copied := make([]string, len(*in.CycleSources))
+		for i, source := range *in.CycleSources {
+			if strings.TrimSpace(source) == "" {
+				return obsidian.GraphTraverseRequest{}, fmt.Errorf("`cycle_sources` must be a list of edge sources")
+			}
+			copied[i] = source
+		}
+		cycleSources = &copied
 	}
 	var direction string
 	if in.Direction != nil {
@@ -155,14 +168,15 @@ func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.Grap
 		return obsidian.GraphTraverseRequest{}, err
 	}
 	return obsidian.GraphTraverseRequest{
-		Scope:      in.Scope,
-		IDField:    idField,
-		Edges:      edges,
-		Start:      start,
-		Direction:  direction,
-		MaxDepth:   in.MaxDepth,
-		Include:    in.Include,
-		LimitNodes: in.LimitNodes,
+		Scope:        in.Scope,
+		IDField:      idField,
+		Edges:        edges,
+		CycleSources: cycleSources,
+		Start:        start,
+		Direction:    direction,
+		MaxDepth:     in.MaxDepth,
+		Include:      in.Include,
+		LimitNodes:   in.LimitNodes,
 	}, nil
 }
 
