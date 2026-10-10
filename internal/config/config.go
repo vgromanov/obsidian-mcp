@@ -4,6 +4,7 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -28,6 +29,21 @@ type Config struct {
 	// RetrievalRegime is an opaque retriever/reranker version tag stamped on
 	// every logged event so downstream scoring never compares incomparable regimes.
 	RetrievalRegime string
+
+	// GraphTraverse is server-side policy for graph_traverse, applied before
+	// the plugin call. Load leaves it permissive unless the env vars are set.
+	GraphTraverse GraphTraverse
+}
+
+// GraphTraverse is the graph_traverse policy loaded from the environment.
+// An empty ScopeAllowlist allows every scope. MaxLimitNodes 0 means no extra
+// cap. AllowBody and AllowFullExport default to true.
+type GraphTraverse struct {
+	ScopeAllowlist       []string
+	MaxLimitNodes        int
+	MaxLimitNodesInvalid bool
+	AllowBody            bool
+	AllowFullExport      bool
 }
 
 func envString(key, def string) string {
@@ -66,6 +82,7 @@ func Load() *Config {
 
 		RetrievalDir:    envString("OBSIDIAN_RETRIEVAL_DIR", ""),
 		RetrievalRegime: envString("OBSIDIAN_RETRIEVAL_REGIME", ""),
+		GraphTraverse:   loadGraphTraverse(),
 	}
 
 	flag.StringVar(&c.Transport, "transport", envString("OBSIDIAN_MCP_TRANSPORT", "stdio"), "MCP transport: stdio or http")
@@ -79,4 +96,45 @@ func Load() *Config {
 		c.APIKey = envString("OBSIDIAN_API_KEY", "")
 	}
 	return c
+}
+
+func loadGraphTraverse() GraphTraverse {
+	maxNodes, invalid := parseMaxLimitNodes(os.Getenv("OBSIDIAN_GRAPH_MAX_LIMIT_NODES"))
+	return GraphTraverse{
+		ScopeAllowlist:       splitCSV(os.Getenv("OBSIDIAN_GRAPH_SCOPE_ALLOWLIST")),
+		MaxLimitNodes:        maxNodes,
+		MaxLimitNodesInvalid: invalid,
+		AllowBody:            envBool("OBSIDIAN_GRAPH_ALLOW_BODY", true),
+		AllowFullExport:      envBool("OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT", true),
+	}
+}
+
+func splitCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+// parseMaxLimitNodes treats empty and 0 as "no extra cap". Any other
+// non-integer or negative value is invalid.
+func parseMaxLimitNodes(raw string) (int, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "0" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, true
+	}
+	return n, false
 }

@@ -103,6 +103,7 @@ func TestProbeCapsParsesVersionsSelf(t *testing.T) {
 	require.True(t, c.MoveVaultFile)
 	require.False(t, c.RestDataviewDQL)
 	require.False(t, c.PluginDataviewQuery)
+	require.False(t, c.PluginGraphTraverse)
 }
 
 func TestPluginDataviewQueryFromServerInfo(t *testing.T) {
@@ -119,11 +120,35 @@ func TestPluginDataviewQueryFromServerInfo(t *testing.T) {
 		{"missing", `{"versions":{"self":"4.1.7"}}`, false},
 		{"garbage", `not-json`, false},
 		{"empty extensions", `{"apiExtensions":[]}`, false},
+		{"graph only", `{"apiExtensions":[{"routes":[{"path":"/graph/traverse/"}]}]}`, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tc.want, PluginDataviewQueryFromServerInfo([]byte(tc.body)))
+		})
+	}
+}
+
+func TestPluginGraphTraverseFromServerInfo(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"object route", `{"apiExtensions":[{"routes":[{"path":"/graph/traverse/","authenticated":true}]}]}`, true},
+		{"no slash", `{"apiExtensions":[{"routes":[{"path":"/graph/traverse"}]}]}`, true},
+		{"string route", `{"apiExtensions":[{"routes":["/graph/traverse/"]}]}`, true},
+		{"dataview only", `{"apiExtensions":[{"routes":[{"path":"/dataview/query/"}]}]}`, false},
+		{"other route", `{"apiExtensions":[{"routes":[{"path":"/si/health/"}]}]}`, false},
+		{"missing", `{"versions":{"self":"4.1.7"}}`, false},
+		{"garbage", `not-json`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, PluginGraphTraverseFromServerInfo([]byte(tc.body)))
 		})
 	}
 }
@@ -149,4 +174,35 @@ func TestProbeCapsSetsPluginDataviewQuery(t *testing.T) {
 	require.Equal(t, "4.1.7", c.Version)
 	require.False(t, c.RestDataviewDQL)
 	require.True(t, c.PluginDataviewQuery)
+	require.False(t, c.PluginGraphTraverse)
+}
+
+func TestProbeCapsSetsBothPluginRoutes(t *testing.T) {
+	t.Parallel()
+	var gets int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/", r.URL.Path)
+		gets++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"versions": map[string]string{"self": "5.0.3"},
+			"apiExtensions": []any{
+				map[string]any{
+					"routes": []any{
+						map[string]any{"path": "/dataview/query/"},
+						map[string]any{"path": "/graph/traverse/"},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(ts.Close)
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := NewClientFromURL(u, "secret", ts.Client())
+	c := ProbeCaps(context.Background(), cli)
+	require.Equal(t, 1, gets)
+	require.Equal(t, "5.0.3", c.Version)
+	require.True(t, c.PluginDataviewQuery)
+	require.True(t, c.PluginGraphTraverse)
+	require.False(t, c.Periodic)
 }

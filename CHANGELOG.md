@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `graph_traverse` MCP tool wrapping Local Smart Lookup `POST /graph/traverse/`
+  when `GET /` advertises that route (same probe as `POST /dataview/query/`).
+  The tool is read-only. Omitting `start` exports the scope; `$body` edges are
+  body wikilinks with `section`, and `$body` in `include` returns note text.
+  Plugin HTTP 400 text is the tool error. Optional env policy
+  (`OBSIDIAN_GRAPH_SCOPE_ALLOWLIST`, `OBSIDIAN_GRAPH_MAX_LIMIT_NODES`,
+  `OBSIDIAN_GRAPH_ALLOW_BODY`, `OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT`) is applied
+  before the plugin call and defaults to allow. A version override still skips
+  the probe, so the tool stays hidden. It is a candidate for a public read-only
+  allowlist; that allowlist is unchanged.
 - `search_vault` `queryType=dataview` calls Local Smart Lookup `POST /dataview/query/`
   (`{query, limit}`) when Local REST is **≥4.0** and `GET /` advertises that route.
   REST **&lt;4.0** still uses `POST /search/` with the Dataview DQL content type

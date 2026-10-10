@@ -25,6 +25,7 @@ func TestResolveCapsFieldOverride(t *testing.T) {
 	require.True(t, d5.Caps.MoveVaultFile)
 	require.False(t, d5.Caps.RestDataviewDQL)
 	require.False(t, d5.Caps.Periodic)
+	require.False(t, d5.Caps.PluginGraphTraverse)
 	require.Equal(t, "5.0.3", d5.Caps.Version)
 }
 

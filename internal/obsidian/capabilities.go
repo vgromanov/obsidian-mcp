@@ -19,6 +19,9 @@ type Caps struct {
 	// PluginDataviewQuery is true when GET / advertises Local Smart Lookup
 	// POST /dataview/query/ (independent of the Local REST semver).
 	PluginDataviewQuery bool
+	// PluginGraphTraverse is true when the same GET / body advertises Local
+	// Smart Lookup POST /graph/traverse/. It is not a Local REST semver flag.
+	PluginGraphTraverse bool
 	// Periodic is true when /periodic/ routes are advertised (hidden only when known gone).
 	Periodic bool
 }
@@ -107,9 +110,9 @@ func ParseServerInfoVersion(raw []byte) (string, error) {
 	return "", fmt.Errorf("GET /: no versions.self or manifest.version")
 }
 
-// ProbeCaps calls GET / and returns CapsForVersion, plus PluginDataviewQuery
-// when that body advertises POST /dataview/query/. On any failure returns
-// Safe36Caps. Nil client is safe and returns Safe36Caps without panicking.
+// ProbeCaps calls GET / once and returns CapsForVersion, plus plugin route
+// flags from that same body. On any failure returns Safe36Caps. Nil client is
+// safe and returns Safe36Caps without panicking.
 func ProbeCaps(ctx context.Context, c *Client) Caps {
 	if c == nil {
 		return Safe36Caps()
@@ -123,7 +126,7 @@ func ProbeCaps(ctx context.Context, c *Client) Caps {
 	if err == nil {
 		caps = CapsForVersion(ver)
 	}
-	caps.PluginDataviewQuery = PluginDataviewQueryFromServerInfo(raw)
+	caps.PluginDataviewQuery, caps.PluginGraphTraverse = pluginRoutesFromServerInfo(raw)
 	return caps
 }
 
@@ -131,42 +134,61 @@ func ProbeCaps(ctx context.Context, c *Client) Caps {
 // Lookup route at /dataview/query/. Routes may be objects ({"path":"..."}) or
 // bare path strings. Missing or unparseable extensions are false.
 func PluginDataviewQueryFromServerInfo(raw []byte) bool {
+	dataview, _ := pluginRoutesFromServerInfo(raw)
+	return dataview
+}
+
+// PluginGraphTraverseFromServerInfo reports whether GET / lists a Local Smart
+// Lookup route at /graph/traverse/. Same route encoding as the Dataview probe.
+func PluginGraphTraverseFromServerInfo(raw []byte) bool {
+	_, graph := pluginRoutesFromServerInfo(raw)
+	return graph
+}
+
+// pluginRoutesFromServerInfo scans apiExtensions once for both plugin routes.
+func pluginRoutesFromServerInfo(raw []byte) (dataview, graph bool) {
 	var root struct {
 		APIExtensions []struct {
 			Routes []json.RawMessage `json:"routes"`
 		} `json:"apiExtensions"`
 	}
 	if err := json.Unmarshal(raw, &root); err != nil {
-		return false
+		return false, false
 	}
 	for _, ext := range root.APIExtensions {
 		for _, route := range ext.Routes {
-			if routeAdvertisesDataviewQuery(route) {
-				return true
+			path, ok := extensionRoutePath(route)
+			if !ok {
+				continue
+			}
+			switch normalizeExtensionRoute(path) {
+			case "/dataview/query":
+				dataview = true
+			case "/graph/traverse":
+				graph = true
 			}
 		}
 	}
-	return false
+	return dataview, graph
 }
 
-func routeAdvertisesDataviewQuery(raw json.RawMessage) bool {
+func extensionRoutePath(raw json.RawMessage) (string, bool) {
 	var asObj struct {
 		Path string `json:"path"`
 	}
-	if err := json.Unmarshal(raw, &asObj); err == nil && isDataviewQueryRoute(asObj.Path) {
-		return true
+	if err := json.Unmarshal(raw, &asObj); err == nil && strings.TrimSpace(asObj.Path) != "" {
+		return asObj.Path, true
 	}
 	var asString string
-	if err := json.Unmarshal(raw, &asString); err == nil && isDataviewQueryRoute(asString) {
-		return true
+	if err := json.Unmarshal(raw, &asString); err == nil && strings.TrimSpace(asString) != "" {
+		return asString, true
 	}
-	return false
+	return "", false
 }
 
-func isDataviewQueryRoute(path string) bool {
+func normalizeExtensionRoute(path string) string {
 	path = strings.TrimSpace(path)
-	path = strings.TrimRight(path, "/")
-	return path == "/dataview/query"
+	return strings.TrimRight(path, "/")
 }
 
 // parseSemver parses a leading major.minor.patch (optional pre-release suffix).
