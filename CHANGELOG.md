@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `graph_traverse` accepts optional `cycle_sources` and forwards it on `POST /graph/traverse/`. When the field is omitted, the route computes cycles without `$body` mention edges. Each cycle includes the sources it was computed over.
 - `graph_traverse` MCP tool wrapping Local Smart Lookup `POST /graph/traverse/`
   when `GET /` advertises that route (same probe as `POST /dataview/query/`).
   The tool is read-only. Omitting `start` exports the scope; `$body` edges are

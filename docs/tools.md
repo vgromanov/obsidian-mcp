@@ -131,20 +131,21 @@ Request and response fields for the two plugin routes are in that plugin's
 
 Registered only when `GET /` lists `POST /graph/traverse/`. The call is read-only (`readOnlyHint: true`, `destructiveHint: false`). It is a candidate for a public read-only tool allowlist; this repository does not change that allowlist.
 
-`$body` as an edge `source` means wikilinks in the note body. Each such edge includes `section` (the heading the link sits under, or null above the first heading). Optional `sections` keeps only those headings, and optional `embeds` includes embedded notes. `$body` inside `include` is different: it returns the raw note body on each node. Omitting `start` exports every node and edge in `scope`. `include: ["$body"]` on that whole-scope export is large.
+`$body` as an edge `source` means wikilinks in the note body. Each such edge includes `section` (the heading the link sits under, or null above the first heading). Optional `sections` keeps only those headings, and optional `embeds` includes embedded notes. `$body` inside `include` is different: it returns the raw note body on each node. Omitting `start` exports every node and edge in `scope`. `include: ["$body"]` on that whole-scope export is large. Omit `cycle_sources` and the route leaves `$body` out of cycle detection; list `$body` there to include mention edges. Each cycle reports the sources it was computed over.
 
 | Argument | Type | Notes |
 |----------|------|-------|
 | `scope` | string | Folder prefix. Empty is the whole vault. A trailing slash matches descendants only |
 | `id_field` | string | Optional frontmatter field used as the node id. Omit it and the route uses the vault path. A blank value is rejected |
 | `edges` | object[] | Non-empty. Each item has `source` (frontmatter field or `$body`), optional `sections` (string[]), optional `embeds` (bool) |
+| `cycle_sources` | string[] | Optional. Edge sources used for cycles. Omit it and the route ignores `$body`. An empty list reports no cycles |
 | `start` | string[] | Ids or paths. Omit to export the whole scope. An empty list is an error |
 | `direction` | string | `out`, `in`, or `both`. Omit it and the route uses `out` |
 | `max_depth` | integer | Omit or null for no depth cap. `0` is the start nodes only |
 | `include` | string[] | Frontmatter fields to project. Reserved names: `$body` (raw note body), `$path` (vault path), `$mtime` (file mtime in milliseconds). `$body` in `include` is not the same as `$body` as an edge `source` |
 | `limit_nodes` | integer | Omit to use the route default (**2000**). Positive integer |
 
-Success JSON is passed through (`nodes`, `edges`, `unresolved`, `conflicts`, `cycles`, `truncated`, `index_ready`). Plugin HTTP 400 text is the tool error.
+Success JSON is passed through (`nodes`, `edges`, `unresolved`, `conflicts`, `cycles`, `truncated`, `index_ready`). Each cycle has `ids` and the `sources` it was computed over. Plugin HTTP 400 text is the tool error.
 
 `limit_edges` and `timeout_ms` exist on `POST /graph/traverse/` (defaults **20000** and **5000**). This tool does not send them, so those defaults apply. A deadline is `200` with `truncated: true`, not an HTTP timeout. `index_ready: false` means the metadata cache may be stale; the call still succeeds.
 

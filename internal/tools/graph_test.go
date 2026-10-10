@@ -150,6 +150,39 @@ func TestGraphTraversePassthroughAndDefaults(t *testing.T) {
 	require.JSONEq(t, `{"scope":"Notes","edges":[{"source":"depends_on"}]}`, saw)
 	require.Contains(t, tool.Description, "vault path")
 	require.Contains(t, tool.Description, "the route uses out")
+	require.Contains(t, tool.Description, "cycle_sources")
+}
+
+func TestGraphTraverseForwardsCycleSources(t *testing.T) {
+	var saw string
+	ctx, cs := graphSession(t, graphOKHandler(t, &saw), GraphPolicy{}, false)
+	args := validGraphArgs()
+	args["edges"] = []any{
+		map[string]any{"source": "depends_on"},
+		map[string]any{"source": "$body"},
+	}
+	args["cycle_sources"] = []any{"$body"}
+	res := callGraph(t, ctx, cs, args)
+	require.False(t, res.IsError, graphText(t, res))
+	require.JSONEq(t, `{
+		"scope":"Notes",
+		"id_field":"id",
+		"edges":[{"source":"depends_on"},{"source":"$body"}],
+		"start":["n1"],
+		"cycle_sources":["$body"]
+	}`, saw)
+
+	saw = ""
+	args["cycle_sources"] = []any{}
+	res = callGraph(t, ctx, cs, args)
+	require.False(t, res.IsError, graphText(t, res))
+	require.JSONEq(t, `{
+		"scope":"Notes",
+		"id_field":"id",
+		"edges":[{"source":"depends_on"},{"source":"$body"}],
+		"start":["n1"],
+		"cycle_sources":[]
+	}`, saw)
 }
 
 func TestGraphTraverseValidationSkipsPlugin(t *testing.T) {
@@ -170,6 +203,7 @@ func TestGraphTraverseValidationSkipsPlugin(t *testing.T) {
 		{"blank include", func(a map[string]any) { a["include"] = []any{"status", ""} }, "`include` must be a list of field names"},
 		{"empty start", func(a map[string]any) { a["start"] = []any{} }, "`start` must list at least one id or path"},
 		{"blank start", func(a map[string]any) { a["start"] = []any{"  "} }, "`start` must list at least one id or path"},
+		{"blank cycle source", func(a map[string]any) { a["cycle_sources"] = []any{" "} }, "`cycle_sources` must be a list of edge sources"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -20,17 +20,19 @@ type GraphTraverseEdge struct {
 
 // GraphTraverseRequest is the JSON body for POST /graph/traverse/.
 // Empty IDField and Direction are omitted so the route applies its defaults
-// (vault-path identity, and direction out). Omitted start (nil or empty after
-// the tool's own check) asks the route for the whole scope.
+// (vault-path identity, and direction out). A nil CycleSources is omitted so
+// the route computes cycles over every edge source except $body. Omitted start
+// (nil or empty after the tool's own check) asks the route for the whole scope.
 type GraphTraverseRequest struct {
-	Scope      string              `json:"scope"`
-	IDField    string              `json:"id_field,omitempty"`
-	Edges      []GraphTraverseEdge `json:"edges"`
-	Start      []string            `json:"start,omitempty"`
-	Direction  string              `json:"direction,omitempty"`
-	MaxDepth   *int                `json:"max_depth,omitempty"`
-	Include    []string            `json:"include,omitempty"`
-	LimitNodes *int                `json:"limit_nodes,omitempty"`
+	Scope        string              `json:"scope"`
+	IDField      string              `json:"id_field,omitempty"`
+	Edges        []GraphTraverseEdge `json:"edges"`
+	CycleSources *[]string           `json:"cycle_sources,omitempty"`
+	Start        []string            `json:"start,omitempty"`
+	Direction    string              `json:"direction,omitempty"`
+	MaxDepth     *int                `json:"max_depth,omitempty"`
+	Include      []string            `json:"include,omitempty"`
+	LimitNodes   *int                `json:"limit_nodes,omitempty"`
 }
 
 // GraphTraverse POSTs /graph/traverse/. HTTP 400 bodies are returned as the
