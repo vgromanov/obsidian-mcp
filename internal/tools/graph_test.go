@@ -108,7 +108,6 @@ func TestGraphTraversePassthroughAndDefaults(t *testing.T) {
 		"id_field":"id",
 		"edges":[{"source":"$body","sections":["Definition"],"embeds":true}],
 		"start":["n1"],
-		"direction":"out",
 		"max_depth":3,
 		"include":["status","$body"],
 		"limit_nodes":25
@@ -141,6 +140,16 @@ func TestGraphTraversePassthroughAndDefaults(t *testing.T) {
 	var schema map[string]any
 	require.NoError(t, json.Unmarshal(raw, &schema))
 	assertSchemaPropertiesAreObjects(t, tool.Name, schema)
+
+	saw = ""
+	minimal := callGraph(t, ctx, cs, map[string]any{
+		"scope": "Notes",
+		"edges": []any{map[string]any{"source": "depends_on"}},
+	})
+	require.False(t, minimal.IsError, graphText(t, minimal))
+	require.JSONEq(t, `{"scope":"Notes","edges":[{"source":"depends_on"}]}`, saw)
+	require.Contains(t, tool.Description, "vault path")
+	require.Contains(t, tool.Description, "the route uses out")
 }
 
 func TestGraphTraverseValidationSkipsPlugin(t *testing.T) {
