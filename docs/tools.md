@@ -12,6 +12,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `delete_active_file` | Local REST API | `DELETE /active/` |
 | `show_file_in_obsidian` | Local REST API | `POST /open/...` |
 | `search_vault` | Local REST API | `POST /search/` — JsonLogic always; Dataview DQL on REST **&lt;4.0**. On REST **≥4.0**, DQL is `POST /dataview/query/` when `GET /` advertises that route (`{query, limit}`); otherwise a clear error |
+| `graph_traverse` | Local Smart Lookup | `POST /graph/traverse/` — registered only when `GET /` advertises that route |
 | `search_vault_simple` | Local REST API | `POST /search/simple/` |
 | `list_vault_files` | Local REST API | `GET /vault/` |
 | `get_vault_file` | Local REST API | `GET /vault/...` — nested paths use per-segment URL encoding (not `%2F`); paginated (`maxLength` default **32768**, `startIndex`); omit `format` for markdown; `format=json` returns NoteJson (`links`/`backlinks` on 4.x) |
@@ -43,7 +44,7 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 | `execute_template` | Templater | `POST /templates/execute` (Obsidian plugin route) |
 | `fetch` | Built-in | HTML→Markdown via `html-to-markdown` |
 
-**Count:** **37** tools on Local REST **3.6.x** / unknown / probe fail; **38** on **4.1.x+** (adds `move_vault_file`); **33** on **5.x** (4.1 catalog minus five `*_periodic_note` — 5.x has no `/periodic/`). Breakdown: 24–25 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch (minus periodic on 5.x).
+**Count:** **37** tools on Local REST **3.6.x** / unknown / probe fail; **38** on **4.1.x+** (adds `move_vault_file`); **33** on **5.x** (4.1 catalog minus five `*_periodic_note` — 5.x has no `/periodic/`). Add **1** (`graph_traverse`) when `GET /` advertises `POST /graph/traverse/`, so the catalog is **38 / 39 / 34** in those three cases. Breakdown: 24–25 Local REST API + 2 Properties hygiene + local semantic search + 8 SI + templater + fetch (minus periodic on 5.x), plus `graph_traverse` when the route is advertised.
 
 ### Capability matrix (Local REST API)
 
@@ -57,7 +58,7 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 | **5.x** (live **5.0.3**) | **yes** | **no** | yes, when advertised | **no** | 4.1 ∩ 5.0.3; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
 | unknown / probe fail | no | yes (3.6-safe) | no (probe failed) | yes | Fail-closed; same as 3.6 |
 
-`PluginDataviewQuery` is not a Local REST semver flag. `ProbeCaps` sets it when authenticated `GET /` `apiExtensions[].routes` includes `/dataview/query/`. `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` still skip that probe, so the flag stays false under the override.
+`PluginDataviewQuery` is not a Local REST semver flag. `ProbeCaps` sets it when authenticated `GET /` `apiExtensions[].routes` includes `/dataview/query/`. The same scan sets `PluginGraphTraverse` when that body includes `/graph/traverse/`. `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` still skip that probe, so both flags stay false under the override.
 
 ### `move_vault_file`
 
@@ -83,6 +84,36 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 When DQL is available the tool description includes two examples: `TABLE status FROM "Projects" WHERE status = "active"` and `LIST FROM #research`.
 
 `search_vault_simple` is unchanged.
+
+### `graph_traverse`
+
+Registered only when `GET /` lists `POST /graph/traverse/`. The call is read-only (`readOnlyHint: true`, `destructiveHint: false`). It is a candidate for a public read-only tool allowlist; this repository does not change that allowlist.
+
+`$body` as an edge `source` means wikilinks in the note body. Each such edge includes `section` (the heading the link sits under, or null above the first heading). Optional `sections` keeps only those headings, and optional `embeds` includes embedded notes. `$body` inside `include` is different: it returns the raw note body on each node. Omitting `start` exports every node and edge in `scope`. `include: ["$body"]` on that whole-scope export is large.
+
+| Argument | Type | Notes |
+|----------|------|-------|
+| `scope` | string | Folder prefix. Empty is the whole vault. A trailing slash matches descendants only |
+| `id_field` | string | Frontmatter field used as the node id. Required; the route rejects an empty value |
+| `edges` | object[] | Non-empty. Each item has `source` (frontmatter field or `$body`), optional `sections` (string[]), optional `embeds` (bool) |
+| `start` | string[] | Ids or paths. Omit to export the whole scope. An empty list is an error |
+| `direction` | string | `out` (default), `in`, or `both` |
+| `max_depth` | integer | Omit or null for no depth cap. `0` is the start nodes only |
+| `include` | string[] | Frontmatter fields to project. `$body` returns the raw note body |
+| `limit_nodes` | integer | Omit to use the route default (**2000**). Positive integer |
+
+Success JSON is passed through (`nodes`, `edges`, `unresolved`, `conflicts`, `cycles`, `truncated`, `index_ready`). Plugin HTTP 400 text is the tool error.
+
+Policy is enforced here, before the plugin call. Defaults are permissive (every scope, no extra node cap, `$body` inclusion on, whole-scope export on).
+
+| Variable | Default | Rejection |
+|----------|---------|-----------|
+| `OBSIDIAN_GRAPH_SCOPE_ALLOWLIST` | empty (any scope) | `scope` must equal a comma-separated prefix or sit under it. A trailing slash on a prefix allows descendants only |
+| `OBSIDIAN_GRAPH_MAX_LIMIT_NODES` | `0` (no extra cap) | `limit_nodes`, or the route default **2000** when omitted, is above the cap. A non-integer other than empty/`0` rejects every call |
+| `OBSIDIAN_GRAPH_ALLOW_BODY` | `true` | `false` rejects `include` containing `$body` |
+| `OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT` | `true` | `false` rejects a call that omits `start` |
+
+Errors name the variable. A stricter profile for a shared server: set a scope prefix list, `OBSIDIAN_GRAPH_MAX_LIMIT_NODES=500`, `OBSIDIAN_GRAPH_ALLOW_BODY=false`, `OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT=false`.
 
 ### `search_vault_local` arguments
 
@@ -140,7 +171,7 @@ Requires **Local Smart Lookup** with `/si/*` routes (trailing slashes). These wr
 
 - **Local REST API** or **[obsidian-api](https://github.com/vigeron/obsidian-api)** with extension support (required).
 - **obsidian-mcp-tools** Obsidian plugin (required for `/templates/execute` and vault prompts — this Go binary replaces only the **downloaded MCP server**, not those routes).
-- **Local Smart Lookup** (`local-smart-lookup` plugin) + **oMLX** on `http://127.0.0.1:8000/v1` with embedding model loaded (required for `search_vault_local` and `si_*`). Set the plugin **Embedding server** to the same host as `OMLX_BASE_URL`.
+- **Local Smart Lookup** (`local-smart-lookup` plugin) + **oMLX** on `http://127.0.0.1:8000/v1` with embedding model loaded (required for `search_vault_local` and `si_*`). `graph_traverse` needs the same plugin when it advertises `POST /graph/traverse/` (no oMLX call). Set the plugin **Embedding server** to the same host as `OMLX_BASE_URL`.
 - **Dataview** (optional; required when using `dataviewSource` / `dataviewQuery` on `search_vault_local`).
 - **Templater** (required for `execute_template` and vault prompts).
 - **Periodic Notes** (community plugin) configured in Obsidian — required for `/periodic/...` tools to resolve notes; the Local REST API returns errors if the plugin is missing or a period is disabled.

@@ -10,7 +10,7 @@ A single-binary [Model Context Protocol](https://modelcontextprotocol.io/) serve
 
 ## What it gives you
 
-- **33–38 MCP tools** (capability-gated by Local REST API version; target **4.1.7**, with **5.x** as the 4.1 ∩ 5.0.3 intersection) covering the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD + `move_vault_file` on ≥4.1.0 / 5.x, search, open, tags, commands, periodic notes on versions below 5), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Semantic Index mining tools (`si_*` over `/si/*`), Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
+- **33–39 MCP tools** (capability-gated by Local REST API version; target **4.1.7**, with **5.x** as the 4.1 ∩ 5.0.3 intersection) covering the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) surface (active note, vault CRUD + `move_vault_file` on ≥4.1.0 / 5.x, search, open, tags, commands, periodic notes on versions below 5), plus **Local Smart Lookup** semantic search (`search_vault_local`, oMLX + LanceDB), Semantic Index mining tools (`si_*` over `/si/*`), `graph_traverse` when the plugin advertises `POST /graph/traverse/`, Templater execution, and a generic `fetch` tool with HTML→Markdown conversion. See [docs/tools.md](docs/tools.md).
 - **Vault-backed prompts** — any note tagged `mcp-tools-prompt` in your prompts folder is exposed as an MCP prompt, executed through Templater on the Obsidian side. See [docs/prompts.md](docs/prompts.md).
 - **Two transports** — `stdio` (default) for editor integrations, `--transport=http` for shared local use.
 - **Single static binary** (~12 MB), no runtime dependencies, easy to ship.
@@ -26,7 +26,7 @@ Upstream is a TypeScript/Bun monorepo with an Obsidian "install MCP server" wrap
 | [Obsidian](https://obsidian.md/) | All tools |
 | [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin (**3.6.x–5.x**; target **4.1.7**, live **5.0.3** as 4.1 ∩ 5.0.3) | All tools (catalog is capability-gated; 5.x hides periodic / REST DQL) |
 | [obsidian-mcp-tools](https://github.com/jacksteamdev/obsidian-mcp-tools) plugin | `execute_template`, vault prompts |
-| **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local`, `si_*` |
+| **Local Smart Lookup** plugin + [oMLX](https://github.com/jundot/omlx) (`:8000`) | `search_vault_local`, `si_*`; `graph_traverse` needs the plugin route only |
 | [Templater](https://github.com/SilentVoid13/Templater) | `execute_template` and dynamic prompts |
 | [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) | `*_periodic_note` tools |
 | [Dataview](https://github.com/blacksmithgu/obsidian-dataview) | Optional filters on `search_vault_local` |
@@ -80,7 +80,11 @@ All knobs are environment variables (CLI flags override). Defaults work for a si
 | `OBSIDIAN_OMLX_CHECK` | `true` | Probe oMLX before `search_vault_local` (set `false` to skip) |
 | `OBSIDIAN_RETRIEVAL_DIR` | _(empty)_ | If set, append `search_vault_local` events to a per-host shard `<dir>/<hostname>.jsonl` (best-effort, never blocks search). Point inside the synced vault to feed offline scoring. Empty disables logging. |
 | `OBSIDIAN_RETRIEVAL_REGIME` | _(empty)_ | Opaque retriever/reranker version tag stamped on each logged retrieval event |
-| `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` | _(empty)_ | Override Local REST plugin semver for capability gating (skips `GET /` probe). Use in tests or when autodetection is wrong. |
+| `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` | _(empty)_ | Override Local REST plugin semver for capability gating (skips `GET /` probe, so `graph_traverse` stays hidden). Use in tests or when autodetection is wrong. |
+| `OBSIDIAN_GRAPH_SCOPE_ALLOWLIST` | _(empty)_ | Comma-separated path prefixes `graph_traverse` may use. Empty allows every scope |
+| `OBSIDIAN_GRAPH_MAX_LIMIT_NODES` | `0` | Extra cap on `limit_nodes` (`0` = none). Omitted `limit_nodes` counts as the route default 2000 |
+| `OBSIDIAN_GRAPH_ALLOW_BODY` | `true` | `false` rejects `include` containing `$body` |
+| `OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT` | `true` | `false` rejects a `graph_traverse` call that omits `start` |
 
 CLI:
 

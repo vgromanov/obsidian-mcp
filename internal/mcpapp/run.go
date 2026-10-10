@@ -46,6 +46,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	gt := cfg.GraphTraverse
 	srv := NewMCPServer(log, tools.Deps{
 		Client:          cli,
 		PromptsDir:      cfg.PromptsDir,
@@ -54,6 +55,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		OmlxCheck:       cfg.OmlxCheck,
 		RetrievalDir:    cfg.RetrievalDir,
 		RetrievalRegime: cfg.RetrievalRegime,
+		GraphPolicy: tools.GraphPolicy{
+			ScopePrefixes:        gt.ScopeAllowlist,
+			MaxLimitNodes:        gt.MaxLimitNodes,
+			MaxLimitNodesInvalid: gt.MaxLimitNodesInvalid,
+			AllowBody:            gt.AllowBody,
+			AllowFullExport:      gt.AllowFullExport,
+		},
+		GraphPolicySet: true,
 	})
 
 	t := strings.ToLower(strings.TrimSpace(cfg.Transport))

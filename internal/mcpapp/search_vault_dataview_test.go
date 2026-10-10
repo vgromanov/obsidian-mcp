@@ -261,5 +261,6 @@ func TestResolveCapsVersionOverrideSkipsPluginProbe(t *testing.T) {
 	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
 	d := tools.ResolveCaps(tools.Deps{Client: cli, RestAPIVersion: "4.1.7"})
 	require.False(t, d.Caps.PluginDataviewQuery)
+	require.False(t, d.Caps.PluginGraphTraverse)
 	require.False(t, d.Caps.RestDataviewDQL)
 }

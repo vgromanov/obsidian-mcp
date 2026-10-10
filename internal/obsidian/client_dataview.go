@@ -29,7 +29,7 @@ func (c *Client) QueryDataview(ctx context.Context, query string, limit *int) (j
 	opt := RequestOptions{Method: http.MethodPost, Path: dataviewQueryPath, BodyString: string(raw), Headers: h}
 	status, b, err := c.Do(ctx, opt)
 	if status == http.StatusBadRequest {
-		return nil, errors.New(pluginDataviewErrorMessage(b))
+		return nil, errors.New(pluginErrorMessage(b, "Dataview query rejected"))
 	}
 	if err != nil {
 		return nil, err
@@ -37,11 +37,11 @@ func (c *Client) QueryDataview(ctx context.Context, query string, limit *int) (j
 	return json.RawMessage(b), nil
 }
 
-// pluginDataviewErrorMessage extracts the plugin's 400 text.
+// pluginErrorMessage extracts a plugin 400 body.
 // Preference: JSON "error" (plugin fallback body), then the text after the
 // first newline of JSON "message" (Local REST canned "Bad Request\n…"), then
-// the whole message, then the raw body.
-func pluginDataviewErrorMessage(body []byte) string {
+// the whole message, then the raw body, then fallback.
+func pluginErrorMessage(body []byte, fallback string) string {
 	var payload struct {
 		Message string `json:"message"`
 		Error   string `json:"error"`
@@ -62,5 +62,8 @@ func pluginDataviewErrorMessage(body []byte) string {
 	if msg := strings.TrimSpace(string(body)); msg != "" {
 		return msg
 	}
-	return "Dataview query rejected"
+	if msg := strings.TrimSpace(fallback); msg != "" {
+		return msg
+	}
+	return "request rejected"
 }

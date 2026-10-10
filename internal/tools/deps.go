@@ -30,6 +30,12 @@ type Deps struct {
 	// ResolveCaps has not run yet.
 	Caps obsidian.Caps
 
+	// GraphPolicy is enforced by graph_traverse before the plugin call.
+	// GraphPolicySet distinguishes an explicit policy from the permissive
+	// default (zero AllowBody would otherwise deny body inclusion).
+	GraphPolicy    GraphPolicy
+	GraphPolicySet bool
+
 	capsResolved bool
 }
 
