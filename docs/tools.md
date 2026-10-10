@@ -85,6 +85,48 @@ When DQL is available the tool description includes two examples: `TABLE status 
 
 `search_vault_simple` is unchanged.
 
+### Choosing a structured query
+
+| Need | Tool |
+|------|------|
+| A Dataview table, list, or task result (filters, one link hop, aggregation) | `search_vault` with `queryType` `dataview` |
+| A per-note JsonLogic match, with no joins | `search_vault` with `queryType` `jsonlogic` |
+| Notes similar to a question. DQL only limits which paths are searched | `search_vault_local` |
+| Link closure, dependents, or a whole-folder graph | `graph_traverse` |
+
+DQL (`TABLE` / `LIST` / `TASK` only; `CALENDAR` and DataviewJS are rejected by the plugin route):
+
+```json
+{ "queryType": "dataview", "query": "TABLE status FROM \"Projects\" WHERE status = \"active\"" }
+```
+
+JsonLogic, evaluated one note at a time:
+
+```json
+{ "queryType": "jsonlogic", "query": "{\"==\":[{\"var\":\"frontmatter.status\"},\"active\"]}" }
+```
+
+`search_vault_local` returns chunks. `dataviewQuery` is not the table:
+
+```json
+{ "query": "active project cards", "dataviewQuery": "LIST FROM \"Projects\" WHERE status = \"active\"" }
+```
+
+`graph_traverse` (`in` follows dependents; omit `start` to export the scope):
+
+```json
+{
+  "scope": "Projects/",
+  "id_field": "id",
+  "edges": [{ "source": "related_projects" }],
+  "direction": "out",
+  "include": ["status", "$path"]
+}
+```
+
+Request and response fields for the two plugin routes are in that plugin's
+`docs/dql-api.md` and `docs/graph-api.md`.
+
 ### `graph_traverse`
 
 Registered only when `GET /` lists `POST /graph/traverse/`. The call is read-only (`readOnlyHint: true`, `destructiveHint: false`). It is a candidate for a public read-only tool allowlist; this repository does not change that allowlist.
@@ -99,10 +141,12 @@ Registered only when `GET /` lists `POST /graph/traverse/`. The call is read-onl
 | `start` | string[] | Ids or paths. Omit to export the whole scope. An empty list is an error |
 | `direction` | string | `out` (default), `in`, or `both` |
 | `max_depth` | integer | Omit or null for no depth cap. `0` is the start nodes only |
-| `include` | string[] | Frontmatter fields to project. `$body` returns the raw note body |
+| `include` | string[] | Frontmatter fields to project. Reserved names: `$body` (raw note body), `$path` (vault path), `$mtime` (file mtime in milliseconds). `$body` in `include` is not the same as `$body` as an edge `source` |
 | `limit_nodes` | integer | Omit to use the route default (**2000**). Positive integer |
 
 Success JSON is passed through (`nodes`, `edges`, `unresolved`, `conflicts`, `cycles`, `truncated`, `index_ready`). Plugin HTTP 400 text is the tool error.
+
+`limit_edges` and `timeout_ms` exist on `POST /graph/traverse/` (defaults **20000** and **5000**). This tool does not send them, so those defaults apply. A deadline is `200` with `truncated: true`, not an HTTP timeout. `index_ready: false` means the metadata cache may be stale; the call still succeeds.
 
 Policy is enforced here, before the plugin call. Defaults are permissive (every scope, no extra node cap, `$body` inclusion on, whole-scope export on).
 

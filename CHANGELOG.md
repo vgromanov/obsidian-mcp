@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Document which tool to use for a Dataview table, a JsonLogic match, semantic search, and a link-graph walk. `graph_traverse` `include` notes the reserved names `$path` and `$mtime` as well as `$body`.
 - Local REST API **5.x** is no longer mapped to the 3.6-safe catalog. Major ≥5
   uses the **4.1 ∩ 5.0.3** intersection: `move_vault_file` on, REST Dataview DQL
   off, periodic tools off (5.x has no `/periodic/`). Tool count on 5.x: **33**.
