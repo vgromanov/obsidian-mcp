@@ -41,11 +41,11 @@ func (d Deps) graphPolicy() GraphPolicy {
 
 const graphTraverseDescription = "Read-only link-graph closure over a vault folder (POST /graph/traverse/). " +
 	"scope is a path prefix; an empty scope is the whole vault. " +
-	"id_field is the frontmatter field used as the node id when it is a non-empty scalar (the route requires it). " +
+	"id_field is an optional frontmatter field used as the node id when it is a non-empty scalar. Omit it and the route uses the vault path. " +
 	"edges[].source is a frontmatter field, or $body for wikilinks in the note body. " +
 	"A $body edge includes section, the heading the link sits under (null above the first heading). " +
 	"Optional sections keeps only those headings. Optional embeds includes embedded notes. " +
-	"direction is out, in, or both (default out). max_depth omitted or null walks until the node cap. " +
+	"direction is out, in, or both. Omit it and the route uses out. max_depth omitted or null walks until the node cap. " +
 	"include projects frontmatter fields onto each node; $body in include returns the raw note body. " +
 	"Omitting start exports every node and edge in scope. include [\"$body\"] on a whole-scope export is large. " +
 	"Read-only candidate for a public tool allowlist; this server does not change that allowlist. " +
@@ -83,7 +83,7 @@ type graphEdgeIn struct {
 
 type graphTraverseIn struct {
 	Scope      string        `json:"scope"`
-	IDField    string        `json:"id_field"`
+	IDField    *string       `json:"id_field,omitempty"`
 	Edges      []graphEdgeIn `json:"edges"`
 	Start      *[]string     `json:"start,omitempty"`
 	Direction  *string       `json:"direction,omitempty"`
@@ -93,8 +93,12 @@ type graphTraverseIn struct {
 }
 
 func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.GraphTraverseRequest, error) {
-	if strings.TrimSpace(in.IDField) == "" {
-		return obsidian.GraphTraverseRequest{}, fmt.Errorf("`id_field` must be a non-empty string")
+	var idField string
+	if in.IDField != nil {
+		idField = strings.TrimSpace(*in.IDField)
+		if idField == "" {
+			return obsidian.GraphTraverseRequest{}, fmt.Errorf("`id_field` must be a non-empty string")
+		}
 	}
 	if len(in.Edges) == 0 {
 		return obsidian.GraphTraverseRequest{}, fmt.Errorf("edges must be a non-empty list")
@@ -115,7 +119,7 @@ func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.Grap
 			Embeds:   edge.Embeds,
 		}
 	}
-	direction := "out"
+	var direction string
 	if in.Direction != nil {
 		direction = strings.TrimSpace(*in.Direction)
 		switch direction {
@@ -152,7 +156,7 @@ func prepareGraphTraverse(in graphTraverseIn, policy GraphPolicy) (obsidian.Grap
 	}
 	return obsidian.GraphTraverseRequest{
 		Scope:      in.Scope,
-		IDField:    strings.TrimSpace(in.IDField),
+		IDField:    idField,
 		Edges:      edges,
 		Start:      start,
 		Direction:  direction,

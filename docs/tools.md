@@ -136,10 +136,10 @@ Registered only when `GET /` lists `POST /graph/traverse/`. The call is read-onl
 | Argument | Type | Notes |
 |----------|------|-------|
 | `scope` | string | Folder prefix. Empty is the whole vault. A trailing slash matches descendants only |
-| `id_field` | string | Frontmatter field used as the node id. Required; the route rejects an empty value |
+| `id_field` | string | Optional frontmatter field used as the node id. Omit it and the route uses the vault path. A blank value is rejected |
 | `edges` | object[] | Non-empty. Each item has `source` (frontmatter field or `$body`), optional `sections` (string[]), optional `embeds` (bool) |
 | `start` | string[] | Ids or paths. Omit to export the whole scope. An empty list is an error |
-| `direction` | string | `out` (default), `in`, or `both` |
+| `direction` | string | `out`, `in`, or `both`. Omit it and the route uses `out` |
 | `max_depth` | integer | Omit or null for no depth cap. `0` is the start nodes only |
 | `include` | string[] | Frontmatter fields to project. Reserved names: `$body` (raw note body), `$path` (vault path), `$mtime` (file mtime in milliseconds). `$body` in `include` is not the same as `$body` as an edge `source` |
 | `limit_nodes` | integer | Omit to use the route default (**2000**). Positive integer |

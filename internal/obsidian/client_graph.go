@@ -19,14 +19,15 @@ type GraphTraverseEdge struct {
 }
 
 // GraphTraverseRequest is the JSON body for POST /graph/traverse/.
-// Direction is one of out, in, both. Omitted start (nil or empty after the
-// tool's own check) asks the route for the whole scope.
+// Empty IDField and Direction are omitted so the route applies its defaults
+// (vault-path identity, and direction out). Omitted start (nil or empty after
+// the tool's own check) asks the route for the whole scope.
 type GraphTraverseRequest struct {
 	Scope      string              `json:"scope"`
-	IDField    string              `json:"id_field"`
+	IDField    string              `json:"id_field,omitempty"`
 	Edges      []GraphTraverseEdge `json:"edges"`
 	Start      []string            `json:"start,omitempty"`
-	Direction  string              `json:"direction"`
+	Direction  string              `json:"direction,omitempty"`
 	MaxDepth   *int                `json:"max_depth,omitempty"`
 	Include    []string            `json:"include,omitempty"`
 	LimitNodes *int                `json:"limit_nodes,omitempty"`

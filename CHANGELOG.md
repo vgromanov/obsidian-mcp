@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `graph_traverse` leaves `id_field` and `direction` off the request when the caller omits them. The route then uses the vault path as the node id and direction `out`. A blank `id_field` is still rejected before the call.
 - Vault CRUD / MOVE request paths encode **per path segment** (reuse
   `EncodeVaultRelativePath`) instead of `url.PathEscape` on the full relative
   path. Local REST API **5.x** returns 404 for `%2F` between folders
