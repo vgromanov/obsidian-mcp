@@ -15,17 +15,17 @@ import (
 func RegisterLocalREST(s *mcp.Server, d Deps) {
 	d = ResolveCaps(d)
 	cli := d.Client
-	caps := d.Caps
+	caps := d.CapsState.Caps()
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_server_info",
-		Description: "Returns basic details about the Obsidian Local REST API and authentication status. This is the only API request that does not require authentication.",
+		Description: "Returns basic details about the Obsidian Local REST API and authentication status. This is the only API request that does not require authentication. The obsidianMcp field reports the Local REST version this server gated its tools on and whether that is the unknown-version fallback.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 		raw, err := cli.GetServerInfo(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		return jsonResult(raw), nil, nil
+		return jsonResult(withCapsStatus(raw, d.CapsState.Status())), nil, nil
 	})
 
 	type getActiveIn struct {
@@ -108,34 +108,7 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 		return textResult("File opened successfully"), nil, nil
 	})
 
-	type searchVaultIn struct {
-		QueryType string `json:"queryType"`
-		Query     string `json:"query"`
-		// Limit is forwarded only to POST /dataview/query/. REST <4.0 DQL and
-		// JsonLogic ignore it.
-		Limit *int `json:"limit,omitempty"`
-	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "search_vault",
-		Description: searchVaultDescription(caps),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchVaultIn) (*mcp.CallToolResult, any, error) {
-		qt := strings.ToLower(strings.TrimSpace(in.QueryType))
-		if qt == "dataview" && !caps.RestDataviewDQL {
-			if !caps.PluginDataviewQuery {
-				return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); install Local Smart Lookup so POST /dataview/query/ is available, or use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
-			}
-			raw, err := cli.QueryDataview(ctx, in.Query, in.Limit)
-			if err != nil {
-				return nil, nil, err
-			}
-			return jsonResult(raw), nil, nil
-		}
-		raw, err := cli.SearchVault(ctx, in.QueryType, in.Query)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(raw), nil, nil
-	})
+	registerSearchVault(s, d)
 
 	type searchSimpleIn struct {
 		Query         string `json:"query"`
@@ -263,35 +236,7 @@ func RegisterLocalREST(s *mcp.Server, d Deps) {
 	})
 
 	if caps.MoveVaultFile {
-		type moveVaultIn struct {
-			Filename       string `json:"filename"`
-			Destination    string `json:"destination"`
-			UpdateLinks    *bool  `json:"updateLinks,omitempty"`
-			AllowOverwrite *bool  `json:"allowOverwrite,omitempty"`
-		}
-		mcp.AddTool(s, &mcp.Tool{
-			Name: "move_vault_file",
-			Description: "Move or rename a vault file via Local REST API MOVE /vault/{path} (requires plugin ≥4.1.0). " +
-				"destination is vault-relative; a trailing slash keeps the source filename under that directory. " +
-				"Absolute destinations starting with / are rejected. Defaults: updateLinks=true (REST uses " +
-				"app.fileManager.renameFile — no separate header; if Obsidian alwaysUpdateLinks is off, a UI modal may block), " +
-				"allowOverwrite=false.",
-		}, func(ctx context.Context, _ *mcp.CallToolRequest, in moveVaultIn) (*mcp.CallToolResult, any, error) {
-			allow := in.AllowOverwrite != nil && *in.AllowOverwrite
-			// updateLinks defaults true; REST has no header — renameFile always updates when Obsidian allows.
-			if in.UpdateLinks != nil && !*in.UpdateLinks {
-				return nil, nil, fmt.Errorf("updateLinks=false is not supported: Local REST MOVE always uses fileManager.renameFile (inbound link updates); set Obsidian alwaysUpdateLinks or accept the UI modal")
-			}
-			loc, err := cli.MoveVaultFile(ctx, in.Filename, in.Destination, allow)
-			if err != nil {
-				return nil, nil, err
-			}
-			msg := "File moved successfully"
-			if loc != "" {
-				msg = msg + " → " + loc
-			}
-			return textResult(msg), nil, nil
-		})
+		registerMoveVaultFile(s, d)
 	}
 }
 
@@ -315,4 +260,120 @@ func searchVaultDescription(caps obsidian.Caps) string {
 	default:
 		return "Search for documents matching a JsonLogic query (POST /search/). REST Dataview DQL was removed in Local REST API 4.0+; install Local Smart Lookup so POST /dataview/query/ is available, or use search_vault_local dataviewQuery/dataviewSource for Dataview path filters, or set queryType to jsonlogic."
 	}
+}
+
+type searchVaultIn struct {
+	// QueryType is "dataview" or "jsonlogic" (case-insensitive).
+	QueryType string `json:"queryType" jsonschema:"dataview or jsonlogic (case-insensitive)"`
+	Query     string `json:"query"`
+	// Limit is forwarded only to POST /dataview/query/. REST <4.0 DQL and
+	// JsonLogic ignore it.
+	Limit *int `json:"limit,omitempty"`
+}
+
+// registerSearchVault (re-)registers search_vault. The description reflects the
+// caps at registration time; the handler reads the live caps on every call.
+func registerSearchVault(s *mcp.Server, d Deps) {
+	cli := d.Client
+	st := d.CapsState
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "search_vault",
+		Description: searchVaultDescription(st.Caps()),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchVaultIn) (*mcp.CallToolResult, any, error) {
+		qt, err := obsidian.ParseQueryType(in.QueryType)
+		if err != nil {
+			return nil, nil, err
+		}
+		caps := st.Refresh(ctx)
+		if qt != obsidian.QueryTypeDataview {
+			raw, err := cli.SearchVault(ctx, string(qt), in.Query)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonResult(raw), nil, nil
+		}
+		if caps.RestDataviewDQL {
+			raw, err := cli.SearchVault(ctx, string(qt), in.Query)
+			if err == nil {
+				return jsonResult(raw), nil, nil
+			}
+			if !obsidian.IsUnsupportedContentType(err) {
+				return nil, nil, err
+			}
+			// The caps said POST /search/ takes DQL but Local REST rejected the
+			// content type: the caps are stale (fallback frozen before Obsidian
+			// started). Re-probe, then retry once on the plugin route.
+			caps = st.Recheck(ctx)
+			if caps.RestDataviewDQL || !caps.PluginDataviewQuery {
+				return nil, nil, err
+			}
+			raw, qerr := cli.QueryDataview(ctx, in.Query, in.Limit)
+			if qerr != nil {
+				return nil, nil, qerr
+			}
+			return jsonResult(raw), nil, nil
+		}
+		if !caps.PluginDataviewQuery {
+			return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); install Local Smart Lookup so POST /dataview/query/ is available, or use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
+		}
+		raw, err := cli.QueryDataview(ctx, in.Query, in.Limit)
+		if err != nil {
+			return nil, nil, err
+		}
+		return jsonResult(raw), nil, nil
+	})
+}
+
+const moveVaultFileToolName = "move_vault_file"
+
+func registerMoveVaultFile(s *mcp.Server, d Deps) {
+	cli := d.Client
+	type moveVaultIn struct {
+		Filename       string `json:"filename"`
+		Destination    string `json:"destination"`
+		UpdateLinks    *bool  `json:"updateLinks,omitempty"`
+		AllowOverwrite *bool  `json:"allowOverwrite,omitempty"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name: moveVaultFileToolName,
+		Description: "Move or rename a vault file via Local REST API MOVE /vault/{path} (requires plugin ≥4.1.0). " +
+			"destination is vault-relative; a trailing slash keeps the source filename under that directory. " +
+			"Absolute destinations starting with / are rejected. Defaults: updateLinks=true (REST uses " +
+			"app.fileManager.renameFile — no separate header; if Obsidian alwaysUpdateLinks is off, a UI modal may block), " +
+			"allowOverwrite=false.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in moveVaultIn) (*mcp.CallToolResult, any, error) {
+		allow := in.AllowOverwrite != nil && *in.AllowOverwrite
+		// updateLinks defaults true; REST has no header — renameFile always updates when Obsidian allows.
+		if in.UpdateLinks != nil && !*in.UpdateLinks {
+			return nil, nil, fmt.Errorf("updateLinks=false is not supported: Local REST MOVE always uses fileManager.renameFile (inbound link updates); set Obsidian alwaysUpdateLinks or accept the UI modal")
+		}
+		loc, err := cli.MoveVaultFile(ctx, in.Filename, in.Destination, allow)
+		if err != nil {
+			return nil, nil, err
+		}
+		msg := "File moved successfully"
+		if loc != "" {
+			msg = msg + " → " + loc
+		}
+		return textResult(msg), nil, nil
+	})
+}
+
+// withCapsStatus adds an obsidianMcp object (probed version, fallback flag) to a
+// GET / JSON object. Non-object bodies pass through unchanged.
+func withCapsStatus(raw []byte, st CapsStatus) []byte {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return raw
+	}
+	b, err := json.Marshal(st)
+	if err != nil {
+		return raw
+	}
+	obj["obsidianMcp"] = b
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return raw
+	}
+	return out
 }

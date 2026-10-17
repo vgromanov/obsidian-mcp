@@ -52,12 +52,14 @@ const graphTraverseDescription = "Read-only link-graph closure over a vault fold
 	"Read-only candidate for a public tool allowlist; this server does not change that allowlist. " +
 	"Policy env (defaults allow the call): OBSIDIAN_GRAPH_SCOPE_ALLOWLIST, OBSIDIAN_GRAPH_MAX_LIMIT_NODES, OBSIDIAN_GRAPH_ALLOW_BODY, OBSIDIAN_GRAPH_ALLOW_FULL_EXPORT."
 
+const graphTraverseToolName = "graph_traverse"
+
 // RegisterGraph registers graph_traverse. Callers gate this on PluginGraphTraverse.
 func RegisterGraph(s *mcp.Server, d Deps) {
 	cli := d.Client
 	destructive := false
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "graph_traverse",
+		Name:        graphTraverseToolName,
 		Description: graphTraverseDescription,
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,

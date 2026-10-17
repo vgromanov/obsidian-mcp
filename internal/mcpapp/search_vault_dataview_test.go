@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
@@ -263,4 +266,63 @@ func TestResolveCapsVersionOverrideSkipsPluginProbe(t *testing.T) {
 	require.False(t, d.Caps.PluginDataviewQuery)
 	require.False(t, d.Caps.PluginGraphTraverse)
 	require.False(t, d.Caps.RestDataviewDQL)
+}
+
+func TestMCPServerStartedBeforeObsidianRoutesDataviewToPlugin(t *testing.T) {
+	t.Setenv("REST_API_VERSION", "")
+	t.Setenv("OBSIDIAN_REST_API_VERSION", "")
+	var up atomic.Bool
+	var mu sync.Mutex
+	var seen []string
+	info := serverInfo("5.1.0", true)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/" && r.Method == http.MethodGet:
+			if !up.Load() {
+				http.Error(w, "starting", http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write(info)
+		case r.URL.Path == "/dataview/query/":
+			_, _ = w.Write([]byte(`[{"path":"Projects/card.md"}]`))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"errorCode":40012,"message":"Unknown or invalid Content-Type."}`))
+		}
+	}))
+	t.Cleanup(ts.Close)
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	cli := obsidian.NewClientFromURL(u, "secret", ts.Client())
+
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	d := testDeps(cli)
+	d.RestAPIVersion = ""
+	d.ReprobeInterval = 20 * time.Millisecond
+	srv := NewMCPServer(nil, d)
+	_, err = srv.Connect(ctx, st, nil)
+	require.NoError(t, err)
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	up.Store(true)
+	time.Sleep(60 * time.Millisecond)
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "search_vault",
+		Arguments: map[string]any{"queryType": "dataview", "query": `TABLE file.name FROM "Projects"`},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Content[0].(*mcp.TextContent).Text, "Projects/card.md")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, seen, "POST /dataview/query/")
+	require.NotContains(t, seen, "POST /search/")
 }
