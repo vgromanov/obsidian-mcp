@@ -8,6 +8,11 @@ import (
 	"github.com/vgromanov/obsidian-mcp/internal/obsidian"
 )
 
+var periodicToolNames = []string{
+	"get_periodic_note", "update_periodic_note", "append_to_periodic_note",
+	"patch_periodic_note", "delete_periodic_note",
+}
+
 // RegisterPeriodic registers Local REST API periodic note tools (current period only).
 func RegisterPeriodic(s *mcp.Server, d Deps) {
 	d = ResolveCaps(d)

@@ -126,7 +126,7 @@ func (c *Client) Do(ctx context.Context, opt RequestOptions) (int, []byte, error
 		return resp.StatusCode, nil, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.StatusCode, b, fmt.Errorf("%s %s: %s", method, opt.Path, summarizeErrorBody(b))
+		return resp.StatusCode, b, newAPIError(method, opt.Path, resp.StatusCode, b)
 	}
 	return resp.StatusCode, b, nil
 }
@@ -215,8 +215,12 @@ func (c *Client) ShowFileInObsidian(ctx context.Context, filename string, newLea
 
 // SearchVault POST /search/
 func (c *Client) SearchVault(ctx context.Context, queryType, query string) (json.RawMessage, error) {
+	qt, err := ParseQueryType(queryType)
+	if err != nil {
+		return nil, err
+	}
 	h := http.Header{}
-	if queryType == "dataview" {
+	if qt == QueryTypeDataview {
 		h.Set("Content-Type", mimeDataviewDQL)
 	} else {
 		h.Set("Content-Type", mimeJSONLogic)
