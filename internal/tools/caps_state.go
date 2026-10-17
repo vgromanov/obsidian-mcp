@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -57,14 +58,19 @@ type CapsState struct {
 	now      func() time.Time
 	probe    func(context.Context, *obsidian.Client) obsidian.Caps
 
-	mu        sync.RWMutex
-	caps      obsidian.Caps
-	lastProbe time.Time
-	probes    int
-
-	probeMu  sync.Mutex // serialises probe + swap + onChange; held via TryLock
-	onChange func(old, next obsidian.Caps)
+	mu         sync.RWMutex
+	caps       obsidian.Caps
+	lastProbe  time.Time // any probe: startup, lazy or forced; gates the lazy interval
+	lastForced time.Time // forced probes only; gates the forced floor
+	probes     int
+	flight     *probeFlight // non-nil while a probe is running
+	onChange   func(old, next obsidian.Caps)
+	waiters    atomic.Int32 // callers currently waiting on a flight (tests)
 }
+
+// probeFlight is one in-flight probe. Callers that arrive meanwhile wait on
+// done instead of using caps the probe is about to replace.
+type probeFlight struct{ done chan struct{} }
 
 func newCapsState(client *obsidian.Client, caps obsidian.Caps, pinned bool, log *slog.Logger) *CapsState {
 	if log == nil {
@@ -125,45 +131,73 @@ func (s *CapsState) sourceLocked() CapsSource {
 // SetOnChange registers the hook run (outside the state lock) after a probe
 // changes the caps. RegisterAll uses it to re-register version-dependent tools.
 func (s *CapsState) SetOnChange(fn func(old, next obsidian.Caps)) {
-	s.probeMu.Lock()
-	defer s.probeMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.onChange = fn
 }
 
 // Refresh re-probes GET / when the caps are the unknown-version fallback and
 // the last probe is at least DefaultReprobeInterval old. It is a no-op for
-// override-pinned caps, known versions, and nil clients.
+// override-pinned caps, known versions, and nil clients. A caller that arrives
+// while a probe is running waits for it and returns the caps it produced.
 func (s *CapsState) Refresh(ctx context.Context) obsidian.Caps {
-	return s.reprobe(ctx, s.interval, true)
+	return s.reprobe(ctx, false)
 }
 
 // Recheck re-probes GET / even when the version is known, because a request
-// showed the caps are stale. Bounded by a short floor, not the 30 s interval.
+// showed the caps are stale. Bounded to one probe per forcedReprobeFloor, which
+// is measured against earlier forced probes only: a startup or lazy probe that
+// ran moments ago does not suppress it. Waits for a running probe like Refresh.
 func (s *CapsState) Recheck(ctx context.Context) obsidian.Caps {
-	return s.reprobe(ctx, forcedReprobeFloor, false)
+	return s.reprobe(ctx, true)
 }
 
-func (s *CapsState) reprobe(ctx context.Context, minGap time.Duration, onlyFallback bool) obsidian.Caps {
-	cur := s.Caps()
-	if s.pinned || s.client == nil || (onlyFallback && cur.Version != "") {
-		return cur
+func (s *CapsState) reprobe(ctx context.Context, forced bool) obsidian.Caps {
+	if s.pinned || s.client == nil {
+		return s.Caps()
 	}
-	if !s.probeMu.TryLock() {
-		return cur
-	}
-	defer s.probeMu.Unlock()
 
 	s.mu.Lock()
-	if !s.lastProbe.IsZero() && s.now().Sub(s.lastProbe) < minGap {
-		cur = s.caps
+	if f := s.flight; f != nil {
+		s.mu.Unlock()
+		s.waiters.Add(1)
+		defer s.waiters.Add(-1)
+		select {
+		case <-f.done:
+		case <-ctx.Done():
+		}
+		return s.Caps()
+	}
+	now := s.now()
+	if forced {
+		if !s.lastForced.IsZero() && now.Sub(s.lastForced) < forcedReprobeFloor {
+			cur := s.caps
+			s.mu.Unlock()
+			return cur
+		}
+	} else if s.caps.Version != "" || (!s.lastProbe.IsZero() && now.Sub(s.lastProbe) < s.interval) {
+		cur := s.caps
 		s.mu.Unlock()
 		return cur
 	}
-	s.lastProbe = s.now()
+	f := &probeFlight{done: make(chan struct{})}
+	s.flight = f
+	s.lastProbe = now
+	if forced {
+		s.lastForced = now
+	}
 	s.probes++
 	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.flight = nil
+		s.mu.Unlock()
+		close(f.done)
+	}()
 
-	pctx, cancel := context.WithTimeout(ctx, reprobeTimeout)
+	// The probe belongs to the server, not to the request that triggered it: a
+	// cancelled call must not turn into a failed probe that burns the interval.
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reprobeTimeout)
 	next := s.probe(pctx, s.client)
 	cancel()
 
@@ -175,18 +209,19 @@ func (s *CapsState) reprobe(ctx context.Context, minGap time.Duration, onlyFallb
 		next = old
 	}
 	s.caps = next
+	onChange := s.onChange
 	s.mu.Unlock()
 
-	if next == old {
-		return next
+	if next != old {
+		s.log.Info("local REST capabilities changed",
+			"from_version", versionOrUnknown(old), "to_version", versionOrUnknown(next),
+			"fallback", next.Version == "", "plugin_dataview_query", next.PluginDataviewQuery,
+			"plugin_graph_traverse", next.PluginGraphTraverse)
+		if onChange != nil {
+			onChange(old, next)
+		}
 	}
-	s.log.Info("local REST capabilities changed",
-		"from_version", versionOrUnknown(old), "to_version", versionOrUnknown(next),
-		"fallback", next.Version == "", "plugin_dataview_query", next.PluginDataviewQuery,
-		"plugin_graph_traverse", next.PluginGraphTraverse)
-	if s.onChange != nil {
-		s.onChange(old, next)
-	}
+
 	return next
 }
 

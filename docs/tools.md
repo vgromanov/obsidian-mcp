@@ -96,7 +96,9 @@ When DQL is available the tool description includes two examples: `TABLE status 
 
 `queryType` is `dataview` or `jsonlogic`, case-insensitive. Anything else (including an empty value and `dql`) is rejected before any request, with an error naming the two valid values. There is no `dql` alias: the error for `dql` says to use `dataview`.
 
-If a `dataview` request to `POST /search/` fails with Local REST error **40012** (`Unknown or invalid Content-Type`), the caps were stale. The server re-probes `GET /` (bounded to once per 2 s) and, when `POST /dataview/query/` is available, retries the query there once. Without the route, the original 40012 error is returned.
+If a `dataview` request to `POST /search/` fails with Local REST error **40012** (`Unknown or invalid Content-Type`), the caps were stale. The server re-probes `GET /` (at most one forced probe per 2 s) and, when `POST /dataview/query/` is advertised, retries the query there once, even if that probe could not parse a version. Without the route, the original 40012 error is returned. Calls that arrive while a probe is running wait for it (at most 5 s) and use its result instead of failing.
+
+On known 5.x caps without the Dataview route, a `dataview` call re-probes once (same 2 s bound) before it returns "not supported", because Local Smart Lookup can register its routes after the Local REST plugin.
 
 `search_vault_simple` is unchanged.
 

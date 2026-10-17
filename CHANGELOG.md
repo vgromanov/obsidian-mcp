@@ -10,9 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A server that starts before Obsidian no longer keeps the 3.6-safe fallback caps for its whole life. While the Local REST version is unknown it re-probes `GET /` lazily on the next `tools/list` or `tools/call`, at most once every 30 s, and swaps in the real caps. Before this, every `search_vault` `dataview` query on Local REST 5.x was sent to `POST /search/` as DQL and failed with `40012`. When the caps change, `search_vault`, `move_vault_file`, the periodic tools and `graph_traverse` are re-registered and the server sends `notifications/tools/list_changed`; clients that ignore it see the new catalog after they reconnect. A version override still pins the caps.
-- A `dataview` `search_vault` request that fails with `40012` on `POST /search/` re-probes `GET /` and, when `POST /dataview/query/` is available, retries there once.
+- A `dataview` `search_vault` request that fails with `40012` on `POST /search/` re-probes `GET /` and, when `POST /dataview/query/` is advertised, retries there once, even if the probe could not parse a version. Calls that arrive while a probe is running wait for it instead of failing. On known 5.x caps without the Dataview route (Local Smart Lookup loaded after the startup probe), a `dataview` call re-probes once, rate-limited, before returning "not supported".
 - `search_vault` rejects any `queryType` other than `dataview` or `jsonlogic` (case-insensitive) with an error naming both. Before this, any other value, such as `dql`, was sent as JsonLogic and failed with an unrelated `40015`. `dql` is not accepted as an alias.
-
 - `graph_traverse` leaves `id_field` and `direction` off the request when the caller omits them. The route then uses the vault path as the node id and direction `out`. A blank `id_field` is still rejected before the call.
 - Vault CRUD / MOVE request paths encode **per path segment** (reuse
   `EncodeVaultRelativePath`) instead of `url.PathEscape` on the full relative

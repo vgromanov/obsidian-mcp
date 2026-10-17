@@ -143,17 +143,86 @@ func TestCapsStateRecheckHonoursFloorAndKeepsKnownCaps(t *testing.T) {
 		return c
 	})
 
-	st.Recheck(context.Background())
-	require.Zero(t, probes.Load(), "inside the floor")
-
-	clk.Advance(forcedReprobeFloor)
 	fail = true
 	require.Equal(t, "5.0.3", st.Recheck(context.Background()).Version, "failed probe must not downgrade known caps")
-	require.EqualValues(t, 1, probes.Load())
+	require.EqualValues(t, 1, probes.Load(), "the startup probe does not suppress the first forced probe")
+
+	fail = false
+	require.Equal(t, "5.0.3", st.Recheck(context.Background()).Version)
+	require.EqualValues(t, 1, probes.Load(), "inside the forced floor")
 
 	clk.Advance(forcedReprobeFloor)
-	fail = false
 	require.Equal(t, "5.1.0", st.Recheck(context.Background()).Version)
+	require.EqualValues(t, 2, probes.Load())
+}
+
+func TestCapsStateProbeSurvivesCancelledRequestContext(t *testing.T) {
+	st, clk, probes := testCapsState(t, obsidian.Safe36Caps(), false, obsidian.Safe36Caps)
+	st.probe = func(ctx context.Context, _ *obsidian.Client) obsidian.Caps {
+		probes.Add(1)
+		if ctx.Err() != nil {
+			return obsidian.Safe36Caps()
+		}
+		return obsidian.CapsForVersion("5.1.0")
+	}
+	clk.Advance(DefaultReprobeInterval)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Equal(t, "5.1.0", st.Refresh(ctx).Version, "a cancelled caller must not fail the probe")
+}
+
+func TestCapsStateWaitersReturnInFlightResult(t *testing.T) {
+	release := make(chan struct{})
+	st, clk, _ := testCapsState(t, obsidian.Safe36Caps(), false, obsidian.Safe36Caps)
+	st.probe = func(context.Context, *obsidian.Client) obsidian.Caps {
+		<-release
+		return obsidian.CapsForVersion("5.1.0")
+	}
+	clk.Advance(DefaultReprobeInterval)
+
+	results := make(chan string, 3)
+	go func() { results <- st.Refresh(context.Background()).Version }()
+	require.Eventually(t, func() bool {
+		st.mu.RLock()
+		defer st.mu.RUnlock()
+		return st.flight != nil
+	}, time.Second, time.Millisecond)
+	for range 2 {
+		go func() { results <- st.Recheck(context.Background()).Version }()
+	}
+	require.Eventually(t, func() bool { return st.waiters.Load() == 2 }, time.Second, time.Millisecond)
+	close(release)
+	for range 3 {
+		require.Equal(t, "5.1.0", <-results, "every caller sees the in-flight probe's caps")
+	}
+}
+
+func TestCapsStateWaiterHonoursContext(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	st, clk, _ := testCapsState(t, obsidian.Safe36Caps(), false, obsidian.Safe36Caps)
+	st.probe = func(context.Context, *obsidian.Client) obsidian.Caps {
+		<-release
+		return obsidian.Safe36Caps()
+	}
+	clk.Advance(DefaultReprobeInterval)
+	go st.Refresh(context.Background())
+	require.Eventually(t, func() bool {
+		st.mu.RLock()
+		defer st.mu.RUnlock()
+		return st.flight != nil
+	}, time.Second, time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { st.Refresh(ctx); close(done) }()
+	require.Eventually(t, func() bool { return st.waiters.Load() == 1 }, time.Second, time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("waiter ignored its cancelled context")
+	}
 }
 
 func TestCapsStateConcurrentRefreshSingleFlight(t *testing.T) {

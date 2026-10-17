@@ -28,9 +28,12 @@ type Deps struct {
 	// not probed. Empty + live Client → ProbeCaps; nil Client → fail-closed 3.6.
 	RestAPIVersion string
 
-	// Caps is the capability snapshot taken by ResolveCaps. Zero value means
-	// ResolveCaps has not run yet. Live caps are read from CapsState, which may
-	// be upgraded after startup by a lazy re-probe.
+	// Caps is the capability snapshot taken by ResolveCaps at startup. Zero
+	// value means ResolveCaps has not run yet. It is not updated afterwards: the
+	// live caps are CapsState.Caps(), which a lazy re-probe can upgrade. Only
+	// RegisterAll wires tool re-registration and notifications/tools/list_changed
+	// to those changes; callers that use the Register* functions directly get live
+	// caps in handlers but a fixed tool catalog.
 	Caps obsidian.Caps
 
 	// CapsState owns the live caps and the lazy re-probe; set by ResolveCaps.
@@ -42,6 +45,9 @@ type Deps struct {
 	// ReprobeInterval is the minimum gap between lazy GET / re-probes while the
 	// caps are the unknown-version fallback. Zero means DefaultReprobeInterval.
 	ReprobeInterval time.Duration
+
+	// Now overrides the clock that rate-limits re-probes (tests). Nil means time.Now.
+	Now func() time.Time
 
 	// GraphPolicy is enforced by graph_traverse before the plugin call.
 	// GraphPolicySet distinguishes an explicit policy from the permissive
@@ -76,6 +82,12 @@ func ResolveCaps(d Deps) Deps {
 	d.CapsState = newCapsState(d.Client, d.Caps, pinned, d.Log)
 	if d.ReprobeInterval > 0 {
 		d.CapsState.interval = d.ReprobeInterval
+	}
+	if d.Now != nil {
+		d.CapsState.now = d.Now
+		if !d.CapsState.lastProbe.IsZero() {
+			d.CapsState.lastProbe = d.Now()
+		}
 	}
 	d.capsResolved = true
 	return d

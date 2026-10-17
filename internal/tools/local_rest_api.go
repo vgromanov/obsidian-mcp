@@ -302,26 +302,34 @@ func registerSearchVault(s *mcp.Server, d Deps) {
 			}
 			// The caps said POST /search/ takes DQL but Local REST rejected the
 			// content type: the caps are stale (fallback frozen before Obsidian
-			// started). Re-probe, then retry once on the plugin route.
+			// started). Re-probe, then retry once on the plugin route whenever it
+			// is advertised. RestDataviewDQL may still be true here (GET / worked
+			// but carried no parseable version); the 40012 already shows that
+			// /search/ does not take DQL.
 			caps = st.Recheck(ctx)
-			if caps.RestDataviewDQL || !caps.PluginDataviewQuery {
+			if !caps.PluginDataviewQuery {
 				return nil, nil, err
 			}
-			raw, qerr := cli.QueryDataview(ctx, in.Query, in.Limit)
-			if qerr != nil {
-				return nil, nil, qerr
-			}
-			return jsonResult(raw), nil, nil
+			return queryDataviewPlugin(ctx, cli, in)
+		}
+		if !caps.PluginDataviewQuery {
+			// Local Smart Lookup may register its routes after the Local REST
+			// plugin, after the startup probe: look once more before giving up.
+			caps = st.Recheck(ctx)
 		}
 		if !caps.PluginDataviewQuery {
 			return nil, nil, fmt.Errorf("queryType=dataview is not supported on Local REST API %s (removed in 4.0+); install Local Smart Lookup so POST /dataview/query/ is available, or use JsonLogic via search_vault, or search_vault_local with dataviewQuery/dataviewSource", capsVersionLabel(caps))
 		}
-		raw, err := cli.QueryDataview(ctx, in.Query, in.Limit)
-		if err != nil {
-			return nil, nil, err
-		}
-		return jsonResult(raw), nil, nil
+		return queryDataviewPlugin(ctx, cli, in)
 	})
+}
+
+func queryDataviewPlugin(ctx context.Context, cli *obsidian.Client, in searchVaultIn) (*mcp.CallToolResult, any, error) {
+	raw, err := cli.QueryDataview(ctx, in.Query, in.Limit)
+	if err != nil {
+		return nil, nil, err
+	}
+	return jsonResult(raw), nil, nil
 }
 
 const moveVaultFileToolName = "move_vault_file"

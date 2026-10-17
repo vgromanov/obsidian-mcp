@@ -302,7 +302,13 @@ func TestMCPServerStartedBeforeObsidianRoutesDataviewToPlugin(t *testing.T) {
 	ct, st := mcp.NewInMemoryTransports()
 	d := testDeps(cli)
 	d.RestAPIVersion = ""
-	d.ReprobeInterval = 20 * time.Millisecond
+	var clockMu sync.Mutex
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	d.Now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return now
+	}
 	srv := NewMCPServer(nil, d)
 	_, err = srv.Connect(ctx, st, nil)
 	require.NoError(t, err)
@@ -312,7 +318,9 @@ func TestMCPServerStartedBeforeObsidianRoutesDataviewToPlugin(t *testing.T) {
 	t.Cleanup(func() { _ = cs.Close() })
 
 	up.Store(true)
-	time.Sleep(60 * time.Millisecond)
+	clockMu.Lock()
+	now = now.Add(tools.DefaultReprobeInterval)
+	clockMu.Unlock()
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "search_vault",
 		Arguments: map[string]any{"queryType": "dataview", "query": `TABLE file.name FROM "Projects"`},
