@@ -50,13 +50,24 @@ Go `obsidian-mcp` mirrors [jacksteamdev/obsidian-mcp-tools](https://github.com/j
 
 At server build the process probes `GET /` (`versions.self`, then `manifest.version`) unless `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` (or `tools.Deps.RestAPIVersion`) overrides. Fail-closed → 3.6-safe catalog (no `move_vault_file`; never advertise 5.x-only tools).
 
+#### Re-probe after a failed start
+
+The fallback is not permanent. A process that starts before Obsidian is up runs on the 3.6-safe caps, and re-probes `GET /` lazily while the version is unknown:
+
+- on the next `tools/list` or `tools/call`, at most once every **30 s** (many calls inside the window cause no extra probe);
+- once a probe succeeds, the real caps are swapped in under a lock and never re-probed again. A later failed probe never downgrades known caps;
+- a version override (`REST_API_VERSION`) pins the caps and disables re-probing;
+- when the probed caps change the catalog, the affected tools are re-registered (`search_vault` description, `move_vault_file`, the periodic tools, `graph_traverse`). The server advertises `tools.listChanged` and sends `notifications/tools/list_changed`, so clients that honour it re-fetch `tools/list`. Clients that ignore the notification see the new descriptions after they reconnect or call `tools/list` again; `tools/call` already uses the live caps either way.
+
+`get_server_info` adds an `obsidianMcp` object to the Local REST body: `restApiVersion`, `capsSource` (`probe`, `override`, or `fallback`), `fallback`, the two plugin-route flags, the probe count, and `lastProbeAt`. The same fields are logged to stderr at startup (`local REST capabilities`) and on every change (`local REST capabilities changed`).
+
 | Plugin version | `move_vault_file` | REST Dataview DQL on `search_vault` | Plugin `POST /dataview/query/` | Periodic tools | Notes |
 |----------------|-------------------|--------------------------------------|-------------------------------|----------------|-------|
 | 3.6.x | no | yes (`POST /search/`) | ignored while REST DQL is on | yes | Current Cursor baseline |
 | 4.0.x | no | no | yes, when `GET /` lists the route | yes | otherwise clear error naming the plugin route |
 | 4.1.x+ (target **4.1.7**) | yes | no | yes, when advertised | yes | NoteJson `links`/`backlinks` |
 | **5.x** (live **5.0.3**) | **yes** | **no** | yes, when advertised | **no** | 4.1 ∩ 5.0.3; header PATCH sends `Markdown-Patch-Version: 1`; no `vault_copy` / trash-delete / JSON PATCH / document-map / native `/mcp/` |
-| unknown / probe fail | no | yes (3.6-safe) | no (probe failed) | yes | Fail-closed; same as 3.6 |
+| unknown / probe fail | no | yes (3.6-safe) | no (probe failed) | yes | Fail-closed; same as 3.6. Re-probed lazily, see below |
 
 `PluginDataviewQuery` is not a Local REST semver flag. `ProbeCaps` sets it when authenticated `GET /` `apiExtensions[].routes` includes `/dataview/query/`. The same scan sets `PluginGraphTraverse` when that body includes `/graph/traverse/`. `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` still skip that probe, so both flags stay false under the override.
 
@@ -82,6 +93,10 @@ At server build the process probes `GET /` (`versions.self`, then `manifest.vers
 | Local REST **≥4.0** and the route is absent | clear MCP error naming `POST /dataview/query/` as the fix. JsonLogic and `search_vault_local` (`dataviewQuery` / `dataviewSource`, a path filter, not a DQL table) still work. |
 
 When DQL is available the tool description includes two examples: `TABLE status FROM "Projects" WHERE status = "active"` and `LIST FROM #research`.
+
+`queryType` is `dataview` or `jsonlogic`, case-insensitive. Anything else (including an empty value and `dql`) is rejected before any request, with an error naming the two valid values. There is no `dql` alias: the error for `dql` says to use `dataview`.
+
+If a `dataview` request to `POST /search/` fails with Local REST error **40012** (`Unknown or invalid Content-Type`), the caps were stale. The server re-probes `GET /` (bounded to once per 2 s) and, when `POST /dataview/query/` is available, retries the query there once. Without the route, the original 40012 error is returned.
 
 `search_vault_simple` is unchanged.
 

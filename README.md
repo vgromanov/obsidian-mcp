@@ -80,7 +80,7 @@ All knobs are environment variables (CLI flags override). Defaults work for a si
 | `OBSIDIAN_OMLX_CHECK` | `true` | Probe oMLX before `search_vault_local` (set `false` to skip) |
 | `OBSIDIAN_RETRIEVAL_DIR` | _(empty)_ | If set, append `search_vault_local` events to a per-host shard `<dir>/<hostname>.jsonl` (best-effort, never blocks search). Point inside the synced vault to feed offline scoring. Empty disables logging. |
 | `OBSIDIAN_RETRIEVAL_REGIME` | _(empty)_ | Opaque retriever/reranker version tag stamped on each logged retrieval event |
-| `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` | _(empty)_ | Override Local REST plugin semver for capability gating (skips `GET /` probe, so `graph_traverse` stays hidden). Use in tests or when autodetection is wrong. |
+| `REST_API_VERSION` / `OBSIDIAN_REST_API_VERSION` | _(empty)_ | Override Local REST plugin semver for capability gating (skips `GET /` probe, so `graph_traverse` stays hidden, and pins the caps: no re-probe). Use in tests or when autodetection is wrong. Without it, a server that started before Obsidian re-probes `GET /` lazily (at most every 30 s) until it learns the version; see [docs/tools.md](docs/tools.md#re-probe-after-a-failed-start). |
 | `OBSIDIAN_GRAPH_SCOPE_ALLOWLIST` | _(empty)_ | Comma-separated path prefixes `graph_traverse` may use. Empty allows every scope |
 | `OBSIDIAN_GRAPH_MAX_LIMIT_NODES` | `0` | Extra cap on `limit_nodes` (`0` = none). Omitted `limit_nodes` counts as the route default 2000 |
 | `OBSIDIAN_GRAPH_ALLOW_BODY` | `true` | `false` rejects `include` containing `$body` |
