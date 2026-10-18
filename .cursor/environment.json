@@ -1,0 +1,4 @@
+{
+  "name": "obsidian-mcp",
+  "install": "./.cursor/install.sh"
+}
